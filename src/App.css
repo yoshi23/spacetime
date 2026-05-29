@@ -18,6 +18,33 @@ body,
   color: var(--text, #888);
 }
 
+/* Canvas switcher (one View = one canvas). */
+.view-switcher {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: 60vw;
+  font: 11px var(--mono, monospace);
+}
+.view-switcher button {
+  border: 1px solid var(--border, #d9d9d9);
+  background: var(--bg, #fff);
+  color: var(--text, #888);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.view-switcher button.is-active {
+  border-color: var(--accent, #aa3bff);
+  background: var(--accent, #aa3bff);
+  color: #fff;
+}
+.view-switcher__new {
+  color: var(--accent, #aa3bff) !important;
+  border-style: dashed !important;
+}
+
 /* Per-workspace short/long response toggle (canvas panel). */
 .length-toggle {
   display: inline-flex;

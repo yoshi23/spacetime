@@ -42,6 +42,8 @@ function Flow() {
   const setSelectedThought = useStore((s) => s.setSelectedThought);
   const responseLength = useStore((s) => s.settings.responseLength);
   const setResponseLength = useStore((s) => s.setResponseLength);
+  const setActiveView = useStore((s) => s.setActiveView);
+  const createView = useStore((s) => s.createView);
   const { screenToFlowPosition } = useReactFlow();
 
   const layout = useMemo(
@@ -49,29 +51,38 @@ function Flow() {
     [views, activeViewId],
   );
 
-  // Project the base + active view layout into React Flow nodes.
+  // Project only thoughts homed in the active canvas into React Flow nodes.
   const nodes = useMemo<RFNode[]>(
     () =>
-      Object.values(base.thoughts).map((thought) => ({
-        id: thought.id,
-        type: 'thought',
-        position: layout[thought.id] ?? { x: 0, y: 0 },
-        data: { thought } satisfies ThoughtNodeData,
-      })),
-    [base.thoughts, layout],
+      Object.values(base.thoughts)
+        .filter((thought) => thought.viewId === activeViewId)
+        .map((thought) => ({
+          id: thought.id,
+          type: 'thought',
+          position: layout[thought.id] ?? { x: 0, y: 0 },
+          data: { thought } satisfies ThoughtNodeData,
+        })),
+    [base.thoughts, layout, activeViewId],
   );
 
-  const edges = useMemo<RFEdge[]>(
-    () =>
-      base.edges.map((e) => ({
+  // Render edges whose endpoints are both visible in this canvas. (Cross-view
+  // edges still exist in the base — they're just not drawn here.)
+  const edges = useMemo<RFEdge[]>(() => {
+    const visible = new Set(
+      Object.values(base.thoughts)
+        .filter((t) => t.viewId === activeViewId)
+        .map((t) => t.id),
+    );
+    return base.edges
+      .filter((e) => visible.has(e.source) && visible.has(e.target))
+      .map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
         // solid connector line
         style: { strokeWidth: 1.5, stroke: 'var(--border, #b8b8c0)' },
-      })),
-    [base.edges],
-  );
+      }));
+  }, [base.thoughts, base.edges, activeViewId]);
 
   // Drag → moveThought (positions live in the active view's layout).
   const onNodesChange = useCallback(
@@ -124,6 +135,29 @@ function Flow() {
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
+          <div className="view-switcher" role="group" aria-label="Canvases">
+            {views.map((v) => (
+              <button
+                type="button"
+                key={v.id}
+                className={v.id === activeViewId ? 'is-active' : ''}
+                aria-pressed={v.id === activeViewId}
+                onClick={() => setActiveView(v.id)}
+              >
+                {v.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="view-switcher__new"
+              title="New canvas"
+              onClick={() => createView()}
+            >
+              + new
+            </button>
+          </div>
+        </Panel>
+        <Panel position="top-right">
           <div className="length-toggle" role="group" aria-label="Response length">
             <button
               type="button"
