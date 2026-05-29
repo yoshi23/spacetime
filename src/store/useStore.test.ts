@@ -59,16 +59,38 @@ describe('hydrate', () => {
   it('restores persisted state instead of seeding', async () => {
     const existing: PersistedState = {
       base: {
-        thoughts: { a: { id: 'a', kind: 'user', content: 'hi', createdAt: 1, updatedAt: 1 } },
+        thoughts: {
+          a: { id: 'a', kind: 'user', content: 'hi', viewId: 'v_canvas', createdAt: 1, updatedAt: 1 },
+        },
         edges: [],
       },
       views: [{ id: 'v_canvas', name: 'Canvas', layout: { a: { x: 5, y: 6 } } }],
+      activeViewId: 'v_canvas',
     };
     const store = new FakeStore(existing);
     const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
     await s.getState().hydrate();
     expect(s.getState().base).toEqual(existing.base);
     expect(s.getState().views).toEqual(existing.views);
+    expect(s.getState().activeViewId).toBe('v_canvas');
+  });
+
+  it('migrates a pre-multi-view blob: thoughts without viewId join v_canvas', async () => {
+    // Old format: thought has no viewId, no activeViewId persisted.
+    const old = {
+      base: {
+        thoughts: {
+          a: { id: 'a', kind: 'user', content: 'legacy', createdAt: 1, updatedAt: 1 },
+        },
+        edges: [],
+      },
+      views: [{ id: 'v_canvas', name: 'Canvas', layout: { a: { x: 0, y: 0 } } }],
+    } as unknown as PersistedState;
+    const store = new FakeStore(old);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    expect(s.getState().base.thoughts['a'].viewId).toBe('v_canvas');
+    expect(s.getState().activeViewId).toBe('v_canvas');
   });
 });
 
@@ -88,17 +110,24 @@ describe('store actions persist through the Store', () => {
     const snapshot: PersistedState = {
       base: s.getState().base,
       views: s.getState().views,
+      activeViewId: s.getState().activeViewId,
     };
 
     // Reload into a fresh store instance from the same backing data.
     const s2 = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
     await s2.getState().hydrate();
 
-    expect({ base: s2.getState().base, views: s2.getState().views }).toEqual(snapshot);
+    expect({
+      base: s2.getState().base,
+      views: s2.getState().views,
+      activeViewId: s2.getState().activeViewId,
+    }).toEqual(snapshot);
     expect(s2.getState().views[0].layout[child!]).toEqual({ x: 222, y: 333 });
     // the branch edge's anchor (offsets + quote) is preserved across reload
     const branchEdge = s2.getState().base.edges.find((e) => e.target === child);
     expect(branchEdge!.anchor).toEqual({ start: 6, end: 11, quote: 'world' });
+    // the seeded + added thoughts are homed in the active canvas
+    expect(s2.getState().base.thoughts[child!].viewId).toBe(s2.getState().activeViewId);
   });
 
   it('deleteThought drops the thought, its edges, and its layout entry', async () => {
@@ -225,5 +254,62 @@ describe('short/long response length', () => {
     const s2 = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
     await s2.getState().hydrate();
     expect(s2.getState().settings.responseLength).toBe('short');
+  });
+});
+
+describe('views (canvases)', () => {
+  it('createView adds a view, switches to it, and seeds exactly one root user thought', async () => {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate(); // default v_canvas + its root
+
+    const viewId = s.getState().createView();
+    expect(s.getState().activeViewId).toBe(viewId);
+    expect(s.getState().views.some((v) => v.id === viewId)).toBe(true);
+
+    const inNew = Object.values(s.getState().base.thoughts).filter((t) => t.viewId === viewId);
+    expect(inNew).toHaveLength(1);
+    expect(inNew[0].kind).toBe('user');
+    // the new view's layout positions its root
+    const view = s.getState().views.find((v) => v.id === viewId)!;
+    expect(view.layout[inNew[0].id]).toBeDefined();
+  });
+
+  it('keeps each canvas thoughts separate (filter by view) while the base stays global', async () => {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    const v1 = s.getState().activeViewId;
+    const a = s.getState().addThought('note', { x: 0, y: 0 }); // in v1
+
+    const v2 = s.getState().createView(); // switches active to v2
+    const b = s.getState().addThought('note', { x: 0, y: 0 }); // in v2
+
+    const inV1 = Object.values(s.getState().base.thoughts).filter((t) => t.viewId === v1);
+    const inV2 = Object.values(s.getState().base.thoughts).filter((t) => t.viewId === v2);
+    expect(inV1.some((t) => t.id === a)).toBe(true);
+    expect(inV1.some((t) => t.id === b)).toBe(false);
+    expect(inV2.some((t) => t.id === b)).toBe(true);
+    // base remains globally queryable: every thought is still in one base map
+    expect(s.getState().base.thoughts[a]).toBeDefined();
+    expect(s.getState().base.thoughts[b]).toBeDefined();
+  });
+
+  it('persists views + activeViewId across reload', async () => {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    const v2 = s.getState().createView();
+
+    const s2 = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s2.getState().hydrate();
+    expect(s2.getState().views.map((v) => v.id)).toContain(v2);
+    expect(s2.getState().activeViewId).toBe(v2);
+
+    // switching active view persists too
+    s2.getState().setActiveView('v_canvas');
+    const s3 = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s3.getState().hydrate();
+    expect(s3.getState().activeViewId).toBe('v_canvas');
   });
 });

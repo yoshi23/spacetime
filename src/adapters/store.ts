@@ -5,6 +5,7 @@ export interface PersistedState {
   base: Base;
   views: View[];
   settings?: Settings; // optional for backward compat with pre-Session-2 blobs
+  activeViewId?: string; // optional for backward compat with pre-multi-view blobs
 }
 
 export interface Store {

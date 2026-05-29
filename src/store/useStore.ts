@@ -15,10 +15,11 @@ import {
   branchFrom as branchFromOp,
   deleteThought as deleteThoughtOp,
   emptyBase,
+  seedView,
   updateContent as updateContentOp,
 } from '../core/graph';
 import type { GraphDeps } from '../core/graph';
-import { buildContext } from '../core/context';
+import { buildMessages } from '../core/messages';
 import { defaultClock, defaultIdGen } from '../core/ids';
 import { IndexedDBStore } from '../adapters/store';
 import type { PersistedState, Store } from '../adapters/store';
@@ -53,8 +54,11 @@ export interface SpaceTimeState {
   deleteThought: (id: ThoughtId) => void;
   setSelectedThought: (id: ThoughtId | null) => void;
   setResponseLength: (length: ResponseLength) => void;
-  // Cmd+Enter: build context from nodeId, ask Claude, attach an ai child.
+  // Cmd+Enter: assemble messages from nodeId, ask Claude, attach an ai child.
   respondTo: (nodeId: ThoughtId) => Promise<ThoughtId | null>;
+  // Canvas management. One View = one canvas = one conversation.
+  setActiveView: (viewId: string) => void;
+  createView: () => string;
 }
 
 const DEFAULT_VIEW_ID = 'v_canvas';
@@ -86,12 +90,27 @@ function defaultView(): View {
   return { id: DEFAULT_VIEW_ID, name: 'Canvas', layout: {} };
 }
 
-// Seed used on first run / empty store: a single root `user` thought.
-function seedState(deps: GraphDeps): PersistedState {
-  const { base, thought } = addThoughtOp(emptyBase(), 'user', deps);
-  const view = defaultView();
-  view.layout[thought.id] = { x: 0, y: 0 };
-  return { base, views: [view] };
+// Seed used on first run / empty store: the default canvas with one root.
+function seedState(deps: GraphDeps): Required<Pick<PersistedState, 'base' | 'views' | 'settings' | 'activeViewId'>> {
+  const { base, root } = seedView(emptyBase(), DEFAULT_VIEW_ID, deps);
+  const view: View = { id: DEFAULT_VIEW_ID, name: 'Canvas', layout: { [root.id]: { x: 0, y: 0 } } };
+  return { base, views: [view], settings: DEFAULT_SETTINGS, activeViewId: DEFAULT_VIEW_ID };
+}
+
+// Backfill viewId on thoughts from a pre-multi-view blob: any thought without
+// a home canvas is migrated into the default view.
+function migrateThoughtViewIds(base: Base, fallbackViewId: string): Base {
+  let changed = false;
+  const thoughts: Base['thoughts'] = {};
+  for (const [id, t] of Object.entries(base.thoughts)) {
+    if (t.viewId) {
+      thoughts[id] = t;
+    } else {
+      thoughts[id] = { ...t, viewId: fallbackViewId };
+      changed = true;
+    }
+  }
+  return changed ? { ...base, thoughts } : base;
 }
 
 export function createSpaceTimeStore(config: StoreConfig = {}) {
@@ -109,8 +128,8 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
     function scheduleSave() {
       if (get().status !== 'ready') return;
       const flush = () => {
-        const { base, views, settings } = get();
-        void store.save({ base, views, settings });
+        const { base, views, settings, activeViewId } = get();
+        void store.save({ base, views, settings, activeViewId });
       };
       if (debounceMs <= 0) {
         flush();
@@ -151,22 +170,30 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
 
       async hydrate() {
         const loaded = await store.load();
-        const state = loaded ?? seedState(deps);
-        const activeViewId = state.views[0]?.id ?? DEFAULT_VIEW_ID;
-        const settings = loaded?.settings ?? DEFAULT_SETTINGS;
+        if (!loaded) {
+          const seeded = seedState(deps);
+          set({ ...seeded, status: 'ready' });
+          void store.save(seeded);
+          return;
+        }
+        const views = loaded.views.length ? loaded.views : [defaultView()];
+        const fallbackViewId = views[0]?.id ?? DEFAULT_VIEW_ID;
+        const activeViewId =
+          loaded.activeViewId && views.some((v) => v.id === loaded.activeViewId)
+            ? loaded.activeViewId
+            : fallbackViewId;
         set({
-          base: state.base,
-          views: state.views.length ? state.views : [defaultView()],
+          base: migrateThoughtViewIds(loaded.base, fallbackViewId),
+          views,
           activeViewId,
-          settings,
+          settings: loaded.settings ?? DEFAULT_SETTINGS,
           status: 'ready',
         });
-        // Persist the freshly seeded state so a reload finds it.
-        if (!loaded) void store.save({ base: get().base, views: get().views, settings });
       },
 
       addThought(kind, position) {
-        const { base, thought } = addThoughtOp(get().base, kind, deps);
+        // New thoughts are homed in the active canvas.
+        const { base, thought } = addThoughtOp(get().base, kind, get().activeViewId, deps);
         const views = setLayout(thought.id, position);
         commit(base, views);
         return thought.id;
@@ -225,13 +252,38 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
         scheduleSave();
       },
 
+      setActiveView(viewId) {
+        if (!get().views.some((v) => v.id === viewId)) return;
+        set({ activeViewId: viewId, selectedThoughtId: null });
+        scheduleSave();
+      },
+
+      createView() {
+        const viewId = `v_${deps.idGen()}`;
+        const { base, root } = seedView(get().base, viewId, deps);
+        const view: View = {
+          id: viewId,
+          name: `Canvas ${get().views.length + 1}`,
+          layout: { [root.id]: { x: 0, y: 0 } },
+        };
+        set({
+          base,
+          views: [...get().views, view],
+          activeViewId: viewId,
+          selectedThoughtId: null,
+        });
+        scheduleSave();
+        return viewId;
+      },
+
       async respondTo(nodeId) {
-        if (!get().base.thoughts[nodeId]) return null;
-        const messages = buildContext(get().base, nodeId);
+        const source = get().base.thoughts[nodeId];
+        if (!source) return null;
+        const messages = buildMessages(get().base, nodeId);
         if (messages.length === 0) return null;
 
-        // Create the pending ai child + parent edge to the source node.
-        const created = addThoughtOp(get().base, 'ai', deps);
+        // Create the pending ai child (same canvas as its source) + parent edge.
+        const created = addThoughtOp(get().base, 'ai', source.viewId, deps);
         const childId = created.thought.id;
         const withEdge = addEdgeOp(created.base, nodeId, childId, 'parent', deps);
         const parentPos = activeView().layout[nodeId] ?? { x: 0, y: 0 };

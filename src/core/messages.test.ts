@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Base, Edge, TextAnchor, Thought } from './types';
-import { buildContext } from './context';
+import { buildMessages } from './messages';
 
 // --- builders -------------------------------------------------------------
 
 function thought(id: string, kind: Thought['kind'], content: string): Thought {
-  return { id, kind, content, createdAt: 0, updatedAt: 0 };
+  return { id, kind, content, viewId: 'v', createdAt: 0, updatedAt: 0 };
 }
 
 function lineage(
@@ -23,14 +23,14 @@ function base(thoughts: Thought[], edges: Edge[] = []): Base {
 
 // --- tests ----------------------------------------------------------------
 
-describe('buildContext', () => {
+describe('buildMessages', () => {
   it('returns [] for an unknown node', () => {
-    expect(buildContext(base([]), 'nope')).toEqual([]);
+    expect(buildMessages(base([]), 'nope')).toEqual([]);
   });
 
   it('root / single node → one user message', () => {
     const b = base([thought('a', 'user', 'hello')]);
-    expect(buildContext(b, 'a')).toEqual([{ role: 'user', content: 'hello' }]);
+    expect(buildMessages(b, 'a')).toEqual([{ role: 'user', content: 'hello' }]);
   });
 
   it('deep chain alternates user/assistant/user…', () => {
@@ -43,7 +43,7 @@ describe('buildContext', () => {
       ],
       [lineage('a', 'b'), lineage('b', 'c'), lineage('c', 'd')],
     );
-    expect(buildContext(b, 'd')).toEqual([
+    expect(buildMessages(b, 'd')).toEqual([
       { role: 'user', content: 'q1' },
       { role: 'assistant', content: 'a1' },
       { role: 'user', content: 'q2' },
@@ -63,7 +63,7 @@ describe('buildContext', () => {
       ],
       [lineage('a', 'b', 'branch'), lineage('b', 'c'), lineage('c', 'd')],
     );
-    expect(buildContext(b, 'd')).toEqual([
+    expect(buildMessages(b, 'd')).toEqual([
       { role: 'user', content: 'first\n\na note\n\nsecond' },
       { role: 'assistant', content: 'answer' },
     ]);
@@ -79,7 +79,7 @@ describe('buildContext', () => {
       ],
       [lineage('a', 'b'), lineage('b', 'c', 'branch')],
     );
-    const msgs = buildContext(b, 'c');
+    const msgs = buildMessages(b, 'c');
     expect(msgs[0].role).toBe('user');
     expect(msgs).toEqual([
       { role: 'user', content: 'root q' },
@@ -97,7 +97,7 @@ describe('buildContext', () => {
       ],
       [lineage('a', 'b', 'branch', anchor)],
     );
-    expect(buildContext(b, 'b')).toEqual([
+    expect(buildMessages(b, 'b')).toEqual([
       {
         role: 'user',
         content: 'hello world, how are you\n\nRe: "world"\n\ntell me about this',
@@ -115,7 +115,7 @@ describe('buildContext', () => {
       ],
       [lineage('a', 'b'), lineage('b', 'c', 'branch', anchor)],
     );
-    expect(buildContext(b, 'c')).toEqual([
+    expect(buildMessages(b, 'c')).toEqual([
       { role: 'user', content: 'cats are great' },
       { role: 'assistant', content: 'indeed' },
       { role: 'user', content: 'Re: "cat"\n\nmore on cats' },

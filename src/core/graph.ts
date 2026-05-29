@@ -10,10 +10,11 @@ export function emptyBase(): Base {
   return { thoughts: {}, edges: [] };
 }
 
-// Create a thought and return the next base plus the created thought.
+// Create a thought (homed in viewId) and return the next base plus it.
 export function addThought(
   base: Base,
   kind: Thought['kind'],
+  viewId: string,
   deps: GraphDeps,
   content = '',
 ): { base: Base; thought: Thought } {
@@ -22,6 +23,7 @@ export function addThought(
     id: deps.idGen(),
     kind,
     content,
+    viewId,
     createdAt: now,
     updatedAt: now,
   };
@@ -29,6 +31,22 @@ export function addThought(
     base: { ...base, thoughts: { ...base.thoughts, [thought.id]: thought } },
     thought,
   };
+}
+
+// All thoughts homed in a given view. viewId is a soft label: this filters
+// for rendering, it does NOT partition the base (cross-view edges remain).
+export function thoughtsForView(base: Base, viewId: string): Thought[] {
+  return Object.values(base.thoughts).filter((t) => t.viewId === viewId);
+}
+
+// Seed a fresh view with exactly one root `user` thought.
+export function seedView(
+  base: Base,
+  viewId: string,
+  deps: GraphDeps,
+): { base: Base; root: Thought } {
+  const { base: next, thought } = addThought(base, 'user', viewId, deps);
+  return { base: next, root: thought };
 }
 
 export function updateContent(
@@ -75,8 +93,10 @@ export function branchFrom(
   deps: GraphDeps,
   anchor?: TextAnchor,
 ): { base: Base; child: Thought | null; edge: Edge | null } {
-  if (!base.thoughts[parentId]) return { base, child: null, edge: null };
-  const created = addThought(base, 'note', deps);
+  const parent = base.thoughts[parentId];
+  if (!parent) return { base, child: null, edge: null };
+  // A branch lives in the same canvas as its parent.
+  const created = addThought(base, 'note', parent.viewId, deps);
   const withEdge = addEdge(created.base, parentId, created.thought.id, 'branch', deps, anchor);
   return { base: withEdge.base, child: created.thought, edge: withEdge.edge };
 }

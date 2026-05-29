@@ -30,7 +30,7 @@ function contribution(content: string, anchor: TextAnchor | undefined): string {
  * same-role thoughts merged (joined with "\n\n"), starting with `user` and
  * strictly alternating. Returns [] for an unknown node.
  */
-export function buildContext(base: Base, nodeId: ThoughtId): LLMMessage[] {
+export function buildMessages(base: Base, nodeId: ThoughtId): LLMMessage[] {
   // Walk incoming lineage edges from nodeId up to the root.
   const chain: { thought: Thought; anchor: TextAnchor | undefined }[] = [];
   const seen = new Set<ThoughtId>();

@@ -7,8 +7,8 @@ import type { Base, View } from '../core/types';
 function fixture(): PersistedState {
   const base: Base = {
     thoughts: {
-      a: { id: 'a', kind: 'user', content: 'root', createdAt: 1, updatedAt: 1 },
-      b: { id: 'b', kind: 'note', content: 'child', createdAt: 2, updatedAt: 3 },
+      a: { id: 'a', kind: 'user', content: 'root', viewId: 'v1', createdAt: 1, updatedAt: 1 },
+      b: { id: 'b', kind: 'note', content: 'child', viewId: 'v1', createdAt: 2, updatedAt: 3 },
     },
     edges: [{ id: 'e1', source: 'a', target: 'b', kind: 'branch' }],
   };

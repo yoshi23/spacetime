@@ -5,6 +5,7 @@ export interface Thought {
   id: ThoughtId;
   kind: 'user' | 'ai' | 'note';
   content: string;                 // markdown
+  viewId: string;                  // home canvas; a SOFT label, not a hard partition
   createdAt: number;
   updatedAt: number;
   meta?: { model?: string; command?: string; tokens?: number };
