@@ -89,6 +89,10 @@ function Flow() {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         fitView
+        // React Flow's default zoom-on-double-click intercepts the dblclick
+        // on the pane (d3-zoom stopPropagation), so it never reaches our
+        // onDoubleClick handler. Disable it so double-click creates a node.
+        zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}
       >
         <Background />
