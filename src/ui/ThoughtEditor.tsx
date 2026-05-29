@@ -96,7 +96,7 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
 
   return (
     <>
-      <div className="thought-node__bar">
+      <div className="thought-node__chrome">
         <span className="thought-node__kind">{thought.kind}</span>
         <span className="thought-node__actions">
           <button

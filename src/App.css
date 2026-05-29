@@ -30,38 +30,46 @@ body,
   height: 100%;
 }
 
-/* --- Thought node --- */
+/* --- Thought node ---
+   A node should read as text living on the canvas, not a sticky note:
+   near-invisible container (3% tint, no hard border, barely-there shadow),
+   kind conveyed by the left accent bar + a small low-contrast label, and
+   chrome (actions, resize) revealed only on hover. */
 .thought-node {
-  width: 220px;
-  background: var(--bg, #fff);
-  border: 1px solid var(--border, #d9d9d9);
-  border-radius: 8px;
-  box-shadow: rgba(0, 0, 0, 0.08) 0 2px 6px;
-  font: 13px/1.4 var(--sans, system-ui);
-  overflow: hidden;
+  width: 240px;
+  /* ~3% tint of the canvas so the container nearly disappears */
+  background: color-mix(in srgb, var(--text, #888) 3%, var(--bg, #fff));
+  border: 1px solid transparent;
+  border-left: 4px solid var(--accent, #aa3bff);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); /* barely perceptible */
+  font: 13px/1.5 var(--sans, system-ui);
+  padding: 12px 14px 12px 16px; /* generous; extra left clears the accent */
 }
 
+/* Selection must stay clearly visible against the faint resting container. */
 .thought-node.is-selected {
-  border-color: var(--accent, #aa3bff);
+  border-color: transparent;
   box-shadow: 0 0 0 2px var(--accent-border, rgba(170, 59, 255, 0.5));
 }
 
+/* Left-edge accent carries the kind. */
 .thought-node--user {
-  border-left: 3px solid var(--accent, #aa3bff);
+  border-left-color: var(--accent, #aa3bff);
 }
 .thought-node--ai {
-  border-left: 3px solid #3b82f6;
+  border-left-color: #3b82f6;
 }
 .thought-node--note {
-  border-left: 3px solid #9ca3af;
+  border-left-color: #9ca3af;
 }
 
-.thought-node__bar {
+.thought-node__chrome {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--border, #eee);
+  min-height: 14px;
+  margin-bottom: 6px;
 }
 
 .thought-node__kind {
@@ -69,11 +77,19 @@ body,
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text, #888);
+  opacity: 0.45; /* low-contrast indicator */
 }
 
+/* Actions rest hidden — a resting node is just text + accent. */
 .thought-node__actions {
   display: flex;
   gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.thought-node:hover .thought-node__actions,
+.thought-node:focus-within .thought-node__actions {
+  opacity: 1;
 }
 
 .thought-node__btn {
@@ -102,11 +118,11 @@ body,
 .thought-node__backdrop {
   box-sizing: border-box;
   width: 100%;
-  min-height: 64px;
+  min-height: 56px;
   margin: 0;
-  padding: 8px;
+  padding: 0; /* generous padding now lives on the node */
   border: none;
-  font: 13px/1.4 var(--sans, system-ui);
+  font: 13px/1.5 var(--sans, system-ui);
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
@@ -115,10 +131,13 @@ body,
   display: block;
   position: relative;
   z-index: 1;
-  resize: vertical;
+  resize: none; /* resize handle revealed on hover only */
   outline: none;
   background: transparent;
   color: var(--text-h, #111);
+}
+.thought-node:hover .thought-node__text {
+  resize: vertical;
 }
 
 .thought-node__backdrop {
