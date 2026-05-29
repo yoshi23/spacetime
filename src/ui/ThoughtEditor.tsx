@@ -43,9 +43,11 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
   const thought = useStore((s) => s.base.thoughts[id]);
   const edges = useStore((s) => s.base.edges);
   const selectedThoughtId = useStore((s) => s.selectedThoughtId);
+  const aiStatus = useStore((s) => s.aiStatus[id]);
   const updateThoughtContent = useStore((s) => s.updateThoughtContent);
   const branchFrom = useStore((s) => s.branchFrom);
   const deleteThought = useStore((s) => s.deleteThought);
+  const respondTo = useStore((s) => s.respondTo);
 
   const content = thought?.content ?? '';
 
@@ -91,6 +93,17 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
     branchFrom(id, { start: selection.start, end: selection.end, quote });
     setSelection(null);
   }, [selection, content, id, branchFrom]);
+
+  // Cmd/Ctrl+Enter → ask Claude for a child response.
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        void respondTo(id);
+      }
+    },
+    [id, respondTo],
+  );
 
   if (!thought) return null;
 
@@ -140,6 +153,7 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
           placeholder="Type a thought…"
           onChange={onChange}
           onSelect={onSelect}
+          onKeyDown={onKeyDown}
           // keep React Flow from hijacking text interactions
           onMouseDown={(e) => e.stopPropagation()}
         />
@@ -157,6 +171,18 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
           </button>
         )}
       </div>
+
+      {aiStatus?.loading && (
+        <div className="thought-node__status" role="status">
+          <span className="thought-node__spinner" aria-hidden="true" />
+          thinking…
+        </div>
+      )}
+      {aiStatus?.error && (
+        <div className="thought-node__error" role="alert">
+          {aiStatus.error}
+        </div>
+      )}
     </>
   );
 }

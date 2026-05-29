@@ -174,3 +174,36 @@ body,
 .thought-node__branch-sel:hover {
   background: var(--accent-bg, rgba(170, 59, 255, 0.1));
 }
+
+/* In-flight + error states for an AI response. */
+.thought-node__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font: 11px var(--mono, monospace);
+  color: var(--text, #888);
+}
+.thought-node__spinner {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--accent-border, rgba(170, 59, 255, 0.5));
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: thought-spin 0.7s linear infinite;
+}
+@keyframes thought-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.thought-node__error {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  font: 11px/1.4 var(--mono, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
