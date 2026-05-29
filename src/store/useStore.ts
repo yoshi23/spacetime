@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Base, EdgeKind, Thought, ThoughtId, View } from '../core/types';
+import type { Base, EdgeKind, TextAnchor, Thought, ThoughtId, View } from '../core/types';
 import {
   addEdge as addEdgeOp,
   addThought as addThoughtOp,
@@ -26,7 +26,7 @@ export interface SpaceTimeState {
   updateThoughtContent: (id: ThoughtId, content: string) => void;
   moveThought: (id: ThoughtId, position: Position) => void;
   addEdge: (source: ThoughtId, target: ThoughtId, kind: EdgeKind) => void;
-  branchFrom: (parentId: ThoughtId) => ThoughtId | null;
+  branchFrom: (parentId: ThoughtId, anchor?: TextAnchor) => ThoughtId | null;
   deleteThought: (id: ThoughtId) => void;
 }
 
@@ -135,8 +135,8 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
         commit(base);
       },
 
-      branchFrom(parentId) {
-        const { base, child } = branchFromOp(get().base, parentId, deps);
+      branchFrom(parentId, anchor) {
+        const { base, child } = branchFromOp(get().base, parentId, deps, anchor);
         if (!child) return null;
         const parentPos = activeView().layout[parentId] ?? { x: 0, y: 0 };
         const views = setLayout(child.id, {

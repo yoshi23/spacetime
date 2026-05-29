@@ -66,8 +66,10 @@ describe('store actions persist through the Store', () => {
     await s.getState().hydrate(); // seeds id1 (root user)
 
     const a = s.getState().addThought('user', { x: 100, y: 100 });
-    s.getState().updateThoughtContent(a, 'hello');
-    const child = s.getState().branchFrom(a);
+    s.getState().updateThoughtContent(a, 'hello world');
+    // anchored branch — the anchor must survive the round-trip
+    const anchor = { start: 6, end: 11, quote: 'world' };
+    const child = s.getState().branchFrom(a, anchor);
     s.getState().moveThought(child!, { x: 222, y: 333 });
 
     const snapshot: PersistedState = {
@@ -81,6 +83,9 @@ describe('store actions persist through the Store', () => {
 
     expect({ base: s2.getState().base, views: s2.getState().views }).toEqual(snapshot);
     expect(s2.getState().views[0].layout[child!]).toEqual({ x: 222, y: 333 });
+    // the branch edge's anchor (offsets + quote) is preserved across reload
+    const branchEdge = s2.getState().base.edges.find((e) => e.target === child);
+    expect(branchEdge!.anchor).toEqual({ start: 6, end: 11, quote: 'world' });
   });
 
   it('deleteThought drops the thought, its edges, and its layout entry', async () => {

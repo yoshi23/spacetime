@@ -117,6 +117,23 @@ describe('branchFrom', () => {
     expect(edge).toBeNull();
     expect(Object.keys(base.thoughts)).toHaveLength(0);
   });
+
+  it('stores an anchor (offsets + quote) on the branch edge when given one', () => {
+    const deps = makeDeps();
+    const root = addThought(emptyBase(), 'user', deps, 'hello world, how are you').base; // id1
+    const anchor = { start: 6, end: 11, quote: 'world' };
+    const { edge } = branchFrom(root, 'id1', deps, anchor);
+    expect(edge!.kind).toBe('branch');
+    expect(edge!.anchor).toEqual({ start: 6, end: 11, quote: 'world' });
+  });
+
+  it('omits anchor entirely for a whole-thought branch (the default)', () => {
+    const deps = makeDeps();
+    const root = addThought(emptyBase(), 'user', deps).base; // id1
+    const { edge } = branchFrom(root, 'id1', deps);
+    expect(edge!.anchor).toBeUndefined();
+    expect('anchor' in edge!).toBe(false);
+  });
 });
 
 describe('deleteThought', () => {

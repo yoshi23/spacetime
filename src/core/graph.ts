@@ -1,4 +1,4 @@
-import type { Base, Edge, EdgeKind, Thought, ThoughtId } from './types';
+import type { Base, Edge, EdgeKind, TextAnchor, Thought, ThoughtId } from './types';
 import type { Clock, IdGen } from './ids';
 
 export interface GraphDeps {
@@ -58,23 +58,26 @@ export function addEdge(
   target: ThoughtId,
   kind: EdgeKind,
   deps: GraphDeps,
+  anchor?: TextAnchor,
 ): { base: Base; edge: Edge | null } {
   if (!base.thoughts[source] || !base.thoughts[target]) return { base, edge: null };
   if (edgeExists(base, source, target, kind)) return { base, edge: null };
-  const edge: Edge = { id: deps.idGen(), source, target, kind };
+  const edge: Edge = { id: deps.idGen(), source, target, kind, ...(anchor ? { anchor } : {}) };
   return { base: { ...base, edges: [...base.edges, edge] }, edge };
 }
 
 // Branch off a parent: create a child `note` thought and a `branch` edge
-// from parent → child.
+// from parent → child. An optional anchor records the selection within the
+// parent the branch came from; omitting it means a whole-thought branch.
 export function branchFrom(
   base: Base,
   parentId: ThoughtId,
   deps: GraphDeps,
+  anchor?: TextAnchor,
 ): { base: Base; child: Thought | null; edge: Edge | null } {
   if (!base.thoughts[parentId]) return { base, child: null, edge: null };
   const created = addThought(base, 'note', deps);
-  const withEdge = addEdge(created.base, parentId, created.thought.id, 'branch', deps);
+  const withEdge = addEdge(created.base, parentId, created.thought.id, 'branch', deps, anchor);
   return { base: withEdge.base, child: created.thought, edge: withEdge.edge };
 }
 
