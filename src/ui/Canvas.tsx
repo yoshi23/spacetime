@@ -18,6 +18,20 @@ import type { ThoughtNodeData } from './ThoughtNode';
 
 const nodeTypes: NodeTypes = { thought: ThoughtNode };
 
+// Minimap dot color per thought kind (matches each node's accent border).
+// Without this, nodes render in React Flow's near-white default and are
+// invisible against the white minimap.
+const KIND_COLOR: Record<string, string> = {
+  user: '#aa3bff',
+  ai: '#3b82f6',
+  note: '#9ca3af',
+};
+
+function miniMapNodeColor(node: RFNode): string {
+  const kind = (node.data as ThoughtNodeData | undefined)?.thought.kind;
+  return (kind && KIND_COLOR[kind]) || '#9ca3af';
+}
+
 function Flow() {
   const base = useStore((s) => s.base);
   const views = useStore((s) => s.views);
@@ -97,7 +111,7 @@ function Flow() {
       >
         <Background />
         <Controls />
-        <MiniMap pannable zoomable />
+        <MiniMap pannable zoomable nodeColor={miniMapNodeColor} nodeStrokeWidth={3} />
       </ReactFlow>
     </div>
   );
