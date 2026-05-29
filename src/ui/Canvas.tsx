@@ -3,6 +3,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -39,6 +40,8 @@ function Flow() {
   const addThought = useStore((s) => s.addThought);
   const moveThought = useStore((s) => s.moveThought);
   const setSelectedThought = useStore((s) => s.setSelectedThought);
+  const responseLength = useStore((s) => s.settings.responseLength);
+  const setResponseLength = useStore((s) => s.setResponseLength);
   const { screenToFlowPosition } = useReactFlow();
 
   const layout = useMemo(
@@ -120,6 +123,26 @@ function Flow() {
         zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}
       >
+        <Panel position="top-left">
+          <div className="length-toggle" role="group" aria-label="Response length">
+            <button
+              type="button"
+              className={responseLength === 'short' ? 'is-active' : ''}
+              aria-pressed={responseLength === 'short'}
+              onClick={() => setResponseLength('short')}
+            >
+              Short
+            </button>
+            <button
+              type="button"
+              className={responseLength === 'long' ? 'is-active' : ''}
+              aria-pressed={responseLength === 'long'}
+              onClick={() => setResponseLength('long')}
+            >
+              Long
+            </button>
+          </div>
+        </Panel>
         <Background />
         <Controls />
         <MiniMap pannable zoomable nodeColor={miniMapNodeColor} nodeStrokeWidth={3} />
