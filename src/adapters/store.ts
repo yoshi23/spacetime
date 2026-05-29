@@ -16,7 +16,11 @@ const KEY = 'spacetime/state/v1';
 // IndexedDB-backed store via idb-keyval. The whole base+views blob is
 // persisted under one key (single user, last-write-wins — see CLAUDE.md).
 export class IndexedDBStore implements Store {
-  constructor(private readonly key: string = KEY) {}
+  private readonly key: string;
+
+  constructor(key: string = KEY) {
+    this.key = key;
+  }
 
   async load(): Promise<PersistedState | null> {
     const data = await get<PersistedState>(this.key);
