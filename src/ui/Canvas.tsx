@@ -49,8 +49,8 @@ function Flow() {
         id: e.id,
         source: e.source,
         target: e.target,
-        // branch edges get a subtle animated look; others default
-        animated: e.kind === 'branch',
+        // solid connector line
+        style: { strokeWidth: 1.5, stroke: 'var(--border, #b8b8c0)' },
       })),
     [base.edges],
   );
