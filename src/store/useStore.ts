@@ -1,5 +1,14 @@
 import { create } from 'zustand';
-import type { Base, EdgeKind, TextAnchor, Thought, ThoughtId, View } from '../core/types';
+import type {
+  Base,
+  EdgeKind,
+  ResponseLength,
+  Settings,
+  TextAnchor,
+  Thought,
+  ThoughtId,
+  View,
+} from '../core/types';
 import {
   addEdge as addEdgeOp,
   addThought as addThoughtOp,
@@ -9,19 +18,31 @@ import {
   updateContent as updateContentOp,
 } from '../core/graph';
 import type { GraphDeps } from '../core/graph';
+import { buildContext } from '../core/context';
 import { defaultClock, defaultIdGen } from '../core/ids';
 import { IndexedDBStore } from '../adapters/store';
 import type { PersistedState, Store } from '../adapters/store';
+import { AnthropicProvider } from '../adapters/anthropic';
+import type { LLMProvider } from '../adapters/llm';
 
 export type Position = { x: number; y: number };
+
+// In-flight / failed state for an AI child. Transient — never persisted.
+export interface AiStatus {
+  loading: boolean;
+  error?: string;
+}
 
 export interface SpaceTimeState {
   base: Base;
   views: View[];
   activeViewId: string;
   status: 'loading' | 'ready';
+  settings: Settings;
   // Transient UI selection (the focused canvas node). Not persisted.
   selectedThoughtId: ThoughtId | null;
+  // Transient per-AI-child request state. Not persisted.
+  aiStatus: Record<ThoughtId, AiStatus>;
 
   hydrate: () => Promise<void>;
   addThought: (kind: Thought['kind'], position: Position) => ThoughtId;
@@ -31,15 +52,34 @@ export interface SpaceTimeState {
   branchFrom: (parentId: ThoughtId, anchor?: TextAnchor) => ThoughtId | null;
   deleteThought: (id: ThoughtId) => void;
   setSelectedThought: (id: ThoughtId | null) => void;
+  setResponseLength: (length: ResponseLength) => void;
+  // Cmd+Enter: build context from nodeId, ask Claude, attach an ai child.
+  respondTo: (nodeId: ThoughtId) => Promise<ThoughtId | null>;
 }
 
 const DEFAULT_VIEW_ID = 'v_canvas';
 const BRANCH_OFFSET: Position = { x: 60, y: 120 };
+// Where an AI reply lands relative to its source node.
+const AI_OFFSET: Position = { x: 0, y: 160 };
+
+const DEFAULT_SETTINGS: Settings = { responseLength: 'long' };
+
+// Maps the per-workspace length toggle to concrete provider opts.
+const RESPONSE_PRESETS: Record<ResponseLength, { maxTokens: number; system?: string }> = {
+  short: {
+    maxTokens: 256,
+    system: 'Be terse and direct. Answer in as few words as possible without losing meaning. No preamble.',
+  },
+  long: { maxTokens: 2048 },
+};
 
 export interface StoreConfig {
   store?: Store;
   deps?: GraphDeps;
   saveDebounceMs?: number;
+  // Lazily constructed on first respondTo so importing the store in tests
+  // never builds the real SDK / reads the env key.
+  createProvider?: () => LLMProvider;
 }
 
 function defaultView(): View {
@@ -58,16 +98,19 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
   const store: Store = config.store ?? new IndexedDBStore();
   const deps: GraphDeps = config.deps ?? { idGen: defaultIdGen, clock: defaultClock };
   const debounceMs = config.saveDebounceMs ?? 500;
+  const createProvider = config.createProvider ?? (() => new AnthropicProvider());
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let provider: LLMProvider | null = null;
+  const getProvider = (): LLMProvider => (provider ??= createProvider());
 
   return create<SpaceTimeState>((set, get) => {
-    // Debounced persistence of the full base+views snapshot.
+    // Debounced persistence of the full base+views+settings snapshot.
     function scheduleSave() {
       if (get().status !== 'ready') return;
       const flush = () => {
-        const { base, views } = get();
-        void store.save({ base, views });
+        const { base, views, settings } = get();
+        void store.save({ base, views, settings });
       };
       if (debounceMs <= 0) {
         flush();
@@ -102,20 +145,24 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
       views: [defaultView()],
       activeViewId: DEFAULT_VIEW_ID,
       status: 'loading',
+      settings: DEFAULT_SETTINGS,
       selectedThoughtId: null,
+      aiStatus: {},
 
       async hydrate() {
         const loaded = await store.load();
         const state = loaded ?? seedState(deps);
         const activeViewId = state.views[0]?.id ?? DEFAULT_VIEW_ID;
+        const settings = loaded?.settings ?? DEFAULT_SETTINGS;
         set({
           base: state.base,
           views: state.views.length ? state.views : [defaultView()],
           activeViewId,
+          settings,
           status: 'ready',
         });
         // Persist the freshly seeded state so a reload finds it.
-        if (!loaded) void store.save({ base: get().base, views: get().views });
+        if (!loaded) void store.save({ base: get().base, views: get().views, settings });
       },
 
       addThought(kind, position) {
@@ -161,11 +208,52 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
           return { ...v, layout };
         });
         if (get().selectedThoughtId === id) set({ selectedThoughtId: null });
+        if (get().aiStatus[id]) {
+          const next = { ...get().aiStatus };
+          delete next[id];
+          set({ aiStatus: next });
+        }
         commit(base, views);
       },
 
       setSelectedThought(id) {
         set({ selectedThoughtId: id });
+      },
+
+      setResponseLength(length) {
+        set({ settings: { ...get().settings, responseLength: length } });
+        scheduleSave();
+      },
+
+      async respondTo(nodeId) {
+        if (!get().base.thoughts[nodeId]) return null;
+        const messages = buildContext(get().base, nodeId);
+        if (messages.length === 0) return null;
+
+        // Create the pending ai child + parent edge to the source node.
+        const created = addThoughtOp(get().base, 'ai', deps);
+        const childId = created.thought.id;
+        const withEdge = addEdgeOp(created.base, nodeId, childId, 'parent', deps);
+        const parentPos = activeView().layout[nodeId] ?? { x: 0, y: 0 };
+        const views = setLayout(childId, {
+          x: parentPos.x + AI_OFFSET.x,
+          y: parentPos.y + AI_OFFSET.y,
+        });
+        set({ aiStatus: { ...get().aiStatus, [childId]: { loading: true } } });
+        commit(withEdge.base, views);
+
+        const preset = RESPONSE_PRESETS[get().settings.responseLength];
+        try {
+          const text = await getProvider().complete(messages, preset);
+          commit(updateContentOp(get().base, childId, text, deps.clock));
+          const next = { ...get().aiStatus };
+          delete next[childId];
+          set({ aiStatus: next });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ aiStatus: { ...get().aiStatus, [childId]: { loading: false, error: message } } });
+        }
+        return childId;
       },
     };
   });

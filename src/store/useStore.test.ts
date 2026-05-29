@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createSpaceTimeStore } from './useStore';
 import type { GraphDeps } from '../core/graph';
 import type { PersistedState, Store } from '../adapters/store';
+import type { LLMMessage, LLMProvider } from '../adapters/llm';
 
 // In-memory fake Store so we can exercise hydrate/save without IndexedDB.
 class FakeStore implements Store {
@@ -16,6 +17,18 @@ class FakeStore implements Store {
   async save(data: PersistedState) {
     this.saves += 1;
     this.data = structuredClone(data);
+  }
+}
+
+// Fake LLM provider: records calls, no network.
+class FakeProvider implements LLMProvider {
+  calls: { messages: LLMMessage[]; opts: { maxTokens: number; system?: string } }[] = [];
+  reply = 'the answer';
+  fail: string | null = null;
+  async complete(messages: LLMMessage[], opts: { maxTokens: number; system?: string }) {
+    this.calls.push({ messages, opts });
+    if (this.fail) throw new Error(this.fail);
+    return this.reply;
   }
 }
 
@@ -101,5 +114,116 @@ describe('store actions persist through the Store', () => {
     expect(s.getState().views[0].layout[a]).toBeUndefined();
     // child thought still present (only the deleted node + incident edges go)
     expect(s.getState().base.thoughts[child]).toBeDefined();
+  });
+});
+
+describe('respondTo (the loop)', () => {
+  async function readyStore(provider: FakeProvider) {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({
+      store,
+      deps: makeDeps(),
+      ...NO_DEBOUNCE,
+      createProvider: () => provider,
+    });
+    await s.getState().hydrate();
+    const root = Object.keys(s.getState().base.thoughts)[0];
+    s.getState().updateThoughtContent(root, 'what is 2+2?');
+    return { s, root };
+  }
+
+  it('creates an ai child with a parent edge and fills it with the response', async () => {
+    const provider = new FakeProvider();
+    const { s, root } = await readyStore(provider);
+
+    const childId = await s.getState().respondTo(root);
+    expect(childId).not.toBeNull();
+
+    const child = s.getState().base.thoughts[childId!];
+    expect(child.kind).toBe('ai');
+    expect(child.content).toBe('the answer');
+    expect(
+      s.getState().base.edges.some(
+        (e) => e.source === root && e.target === childId && e.kind === 'parent',
+      ),
+    ).toBe(true);
+    // status cleared on success
+    expect(s.getState().aiStatus[childId!]).toBeUndefined();
+    // the source node's content reached the provider as the last user message
+    expect(provider.calls[0].messages.at(-1)).toEqual({ role: 'user', content: 'what is 2+2?' });
+  });
+
+  it('shows a loading state on the pending child while in flight', async () => {
+    let resolve!: (v: string) => void;
+    const provider = new FakeProvider();
+    provider.complete = (messages, opts) => {
+      provider.calls.push({ messages, opts });
+      return new Promise<string>((r) => {
+        resolve = r;
+      });
+    };
+    const { s, root } = await readyStore(provider);
+
+    const before = new Set(Object.keys(s.getState().base.thoughts));
+    const pending = s.getState().respondTo(root);
+    const childId = Object.keys(s.getState().base.thoughts).find((id) => !before.has(id))!;
+
+    expect(s.getState().aiStatus[childId].loading).toBe(true);
+    resolve('done');
+    await pending;
+    expect(s.getState().aiStatus[childId]).toBeUndefined();
+    expect(s.getState().base.thoughts[childId].content).toBe('done');
+  });
+
+  it('surfaces errors inline without crashing; the child persists', async () => {
+    const provider = new FakeProvider();
+    provider.fail = 'invalid x-api-key';
+    const { s, root } = await readyStore(provider);
+
+    const childId = await s.getState().respondTo(root);
+    expect(childId).not.toBeNull();
+    expect(s.getState().aiStatus[childId!]).toEqual({ loading: false, error: 'invalid x-api-key' });
+    // the ai child still exists (error renders on it; no crash, no silent drop)
+    expect(s.getState().base.thoughts[childId!]?.kind).toBe('ai');
+  });
+});
+
+describe('short/long response length', () => {
+  it('sends different max_tokens for short vs long', async () => {
+    const provider = new FakeProvider();
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({
+      store,
+      deps: makeDeps(),
+      ...NO_DEBOUNCE,
+      createProvider: () => provider,
+    });
+    await s.getState().hydrate();
+    const root = Object.keys(s.getState().base.thoughts)[0];
+    s.getState().updateThoughtContent(root, 'hi');
+
+    s.getState().setResponseLength('short');
+    await s.getState().respondTo(root);
+    s.getState().setResponseLength('long');
+    await s.getState().respondTo(root);
+
+    const short = provider.calls[0].opts;
+    const long = provider.calls[1].opts;
+    expect(short.maxTokens).toBe(256);
+    expect(short.system).toBeTruthy();
+    expect(long.maxTokens).toBe(2048);
+    expect(long.system).toBeUndefined();
+    expect(long.maxTokens).toBeGreaterThan(short.maxTokens);
+  });
+
+  it('persists the choice across reload', async () => {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    s.getState().setResponseLength('short');
+
+    const s2 = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s2.getState().hydrate();
+    expect(s2.getState().settings.responseLength).toBe('short');
   });
 });

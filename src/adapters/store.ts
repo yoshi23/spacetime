@@ -1,9 +1,10 @@
 import { get, set } from 'idb-keyval';
-import type { Base, View } from '../core/types';
+import type { Base, Settings, View } from '../core/types';
 
 export interface PersistedState {
   base: Base;
   views: View[];
+  settings?: Settings; // optional for backward compat with pre-Session-2 blobs
 }
 
 export interface Store {

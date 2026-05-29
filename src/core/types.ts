@@ -35,3 +35,9 @@ export interface Base {
   thoughts: Record<ThoughtId, Thought>;
   edges: Edge[];
 }
+
+// Per-workspace settings (persisted).
+export type ResponseLength = 'short' | 'long';
+export interface Settings {
+  responseLength: ResponseLength;
+}
