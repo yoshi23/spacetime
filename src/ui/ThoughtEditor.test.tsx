@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThoughtEditor } from './ThoughtEditor';
 import { useStore } from '../store/useStore';
 
@@ -44,24 +44,42 @@ describe('ThoughtEditor selection branching (smoke)', () => {
     expect(edge!.anchor).toBeUndefined();
   });
 
-  it('renders a persistent highlight on an anchored span', () => {
+  it('highlights the anchored span only while the child branch is selected', () => {
     const id = useStore.getState().addThought('user', { x: 0, y: 0 });
     useStore.getState().updateThoughtContent(id, 'alpha beta gamma');
-    useStore.getState().branchFrom(id, { start: 6, end: 10, quote: 'beta' });
+    const child = useStore.getState().branchFrom(id, { start: 6, end: 10, quote: 'beta' });
 
     render(<ThoughtEditor id={id} />);
-    const mark = screen.getByText('beta', { selector: 'mark' });
-    expect(mark).toBeTruthy();
+    // No selection → no highlight.
+    act(() => useStore.getState().setSelectedThought(null));
+    expect(screen.queryByText('beta', { selector: 'mark' })).toBeNull();
+
+    // Select the child → its origin span lights up in this parent.
+    act(() => useStore.getState().setSelectedThought(child));
+    expect(screen.getByText('beta', { selector: 'mark' })).toBeTruthy();
+  });
+
+  it('highlights the whole thought for a selected whole-thought (anchorless) branch', () => {
+    const id = useStore.getState().addThought('user', { x: 0, y: 0 });
+    useStore.getState().updateThoughtContent(id, 'whole node text');
+    const child = useStore.getState().branchFrom(id); // no anchor
+
+    render(<ThoughtEditor id={id} />);
+    act(() => useStore.getState().setSelectedThought(child));
+    expect(screen.getByText('whole node text', { selector: 'mark' })).toBeTruthy();
   });
 
   it('degrades gracefully: highlight disappears when the parent edit breaks the quote', () => {
     const id = useStore.getState().addThought('user', { x: 0, y: 0 });
     useStore.getState().updateThoughtContent(id, 'alpha beta gamma');
-    useStore.getState().branchFrom(id, { start: 6, end: 10, quote: 'beta' });
-    // Edit the parent so offsets 6..10 no longer slice "beta" — no recompute.
-    useStore.getState().updateThoughtContent(id, 'x');
+    const child = useStore.getState().branchFrom(id, { start: 6, end: 10, quote: 'beta' });
 
     render(<ThoughtEditor id={id} />);
+    act(() => useStore.getState().setSelectedThought(child));
+    expect(screen.getByText('beta', { selector: 'mark' })).toBeTruthy();
+
+    // Edit the parent so offsets 6..10 no longer slice "beta" — no recompute.
+    act(() => useStore.getState().updateThoughtContent(id, 'x'));
     // No crash, and no stale highlight rendered.
     expect(screen.queryByText('beta', { selector: 'mark' })).toBeNull();
     // The branch edge still persists in the base.

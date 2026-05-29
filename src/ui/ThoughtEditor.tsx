@@ -42,21 +42,31 @@ export function anchorSegments(content: string, anchors: readonly TextAnchor[]):
 export function ThoughtEditor({ id }: { id: ThoughtId }) {
   const thought = useStore((s) => s.base.thoughts[id]);
   const edges = useStore((s) => s.base.edges);
+  const selectedThoughtId = useStore((s) => s.selectedThoughtId);
   const updateThoughtContent = useStore((s) => s.updateThoughtContent);
   const branchFrom = useStore((s) => s.branchFrom);
   const deleteThought = useStore((s) => s.deleteThought);
 
-  // Anchors that originate from this thought (its outgoing branch selections).
-  const anchors = useMemo(
+  const content = thought?.content ?? '';
+
+  // Highlight is selection-driven: when a child node is selected and this
+  // thought is its branch origin (source), show where it came from — the
+  // anchored span, or the whole thought for a whole-thought (anchorless)
+  // branch. No selected child of ours → no highlight.
+  const originEdge = useMemo(
     () =>
-      edges
-        .filter((e) => e.source === id && e.anchor)
-        .map((e) => e.anchor as TextAnchor),
-    [edges, id],
+      selectedThoughtId
+        ? edges.find((e) => e.source === id && e.target === selectedThoughtId)
+        : undefined,
+    [edges, id, selectedThoughtId],
   );
 
-  const content = thought?.content ?? '';
-  const segments = useMemo(() => anchorSegments(content, anchors), [content, anchors]);
+  const segments = useMemo(() => {
+    if (!originEdge) return anchorSegments(content, []);
+    const anchor: TextAnchor =
+      originEdge.anchor ?? { start: 0, end: content.length, quote: content };
+    return anchorSegments(content, [anchor]);
+  }, [content, originEdge]);
 
   // Live text selection within the textarea ({start,end}, collapsed → null).
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);

@@ -20,6 +20,8 @@ export interface SpaceTimeState {
   views: View[];
   activeViewId: string;
   status: 'loading' | 'ready';
+  // Transient UI selection (the focused canvas node). Not persisted.
+  selectedThoughtId: ThoughtId | null;
 
   hydrate: () => Promise<void>;
   addThought: (kind: Thought['kind'], position: Position) => ThoughtId;
@@ -28,6 +30,7 @@ export interface SpaceTimeState {
   addEdge: (source: ThoughtId, target: ThoughtId, kind: EdgeKind) => void;
   branchFrom: (parentId: ThoughtId, anchor?: TextAnchor) => ThoughtId | null;
   deleteThought: (id: ThoughtId) => void;
+  setSelectedThought: (id: ThoughtId | null) => void;
 }
 
 const DEFAULT_VIEW_ID = 'v_canvas';
@@ -99,6 +102,7 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
       views: [defaultView()],
       activeViewId: DEFAULT_VIEW_ID,
       status: 'loading',
+      selectedThoughtId: null,
 
       async hydrate() {
         const loaded = await store.load();
@@ -156,7 +160,12 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
           delete layout[id];
           return { ...v, layout };
         });
+        if (get().selectedThoughtId === id) set({ selectedThoughtId: null });
         commit(base, views);
+      },
+
+      setSelectedThought(id) {
+        set({ selectedThoughtId: id });
       },
     };
   });

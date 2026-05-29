@@ -38,6 +38,7 @@ function Flow() {
   const activeViewId = useStore((s) => s.activeViewId);
   const addThought = useStore((s) => s.addThought);
   const moveThought = useStore((s) => s.moveThought);
+  const setSelectedThought = useStore((s) => s.setSelectedThought);
   const { screenToFlowPosition } = useReactFlow();
 
   const layout = useMemo(
@@ -81,6 +82,15 @@ function Flow() {
     [moveThought],
   );
 
+  // Track the selected node so a parent can highlight where a selected
+  // child branched from.
+  const onSelectionChange = useCallback(
+    ({ nodes: selected }: { nodes: RFNode[] }) => {
+      setSelectedThought(selected[0]?.id ?? null);
+    },
+    [setSelectedThought],
+  );
+
   // Double-click empty canvas → create a user thought at that point.
   const onDoubleClick = useCallback(
     (event: React.MouseEvent) => {
@@ -102,6 +112,7 @@ function Flow() {
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
+        onSelectionChange={onSelectionChange}
         fitView
         // React Flow's default zoom-on-double-click intercepts the dblclick
         // on the pane (d3-zoom stopPropagation), so it never reaches our
