@@ -91,16 +91,67 @@ body,
   color: var(--text-h, #000);
 }
 
+/* The editor stacks the textarea over a highlight backdrop that mirrors it. */
+.thought-node__editor {
+  position: relative;
+}
+
+/* Shared text metrics — backdrop and textarea MUST match exactly so the
+   highlighted spans line up under the live text. */
+.thought-node__text,
+.thought-node__backdrop {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  margin: 0;
+  padding: 8px;
+  border: none;
+  font: 13px/1.4 var(--sans, system-ui);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
 .thought-node__text {
   display: block;
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 64px;
+  position: relative;
+  z-index: 1;
   resize: vertical;
-  border: none;
   outline: none;
-  padding: 8px;
   background: transparent;
   color: var(--text-h, #111);
-  font: 13px/1.4 var(--sans, system-ui);
+}
+
+.thought-node__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  color: transparent; /* only the <mark> backgrounds are visible */
+  pointer-events: none;
+}
+
+/* Subtle, persistent highlight on an anchored span. */
+.thought-node__mark {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.18));
+  border-radius: 2px;
+  color: transparent;
+}
+
+/* "Branch from selection" affordance — appears while text is selected. */
+.thought-node__branch-sel {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  border: 1px solid var(--accent-border, rgba(170, 59, 255, 0.5));
+  background: var(--bg, #fff);
+  color: var(--accent, #aa3bff);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font: 11px var(--mono, monospace);
+  cursor: pointer;
+  box-shadow: var(--shadow, rgba(0, 0, 0, 0.12) 0 2px 6px);
+}
+.thought-node__branch-sel:hover {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
 }
