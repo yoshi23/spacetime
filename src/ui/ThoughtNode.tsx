@@ -26,7 +26,9 @@ function ThoughtNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className={`thought-node thought-node--${thought.kind}${selected ? ' is-selected' : ''}`}>
-      <Handle type="target" position={Position.Top} />
+      {/* Handles are edge anchors only. Hand-drawn connections are a
+          Layer 2 feature (/connect → link edges); not connectable in v1. */}
+      <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="thought-node__bar">
         <span className="thought-node__kind">{thought.kind}</span>
         <span className="thought-node__actions">
@@ -58,7 +60,7 @@ function ThoughtNodeComponent({ id, data, selected }: NodeProps) {
         // keep React Flow from hijacking text interactions
         onMouseDown={(e) => e.stopPropagation()}
       />
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Bottom} isConnectable={false} />
     </div>
   );
 }
