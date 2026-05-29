@@ -39,11 +39,18 @@ export interface Thought {
   // later: embedding?: number[]   ← retrieval / connect / patterns hang here
 }
 
+export interface TextAnchor {
+  start: number;                   // char offset into parent (source) content
+  end: number;
+  quote: string;                   // snapshot of highlighted text — survives parent edits
+}
+
 export interface Edge {
   id: string;
   source: ThoughtId;
   target: ThoughtId;
   kind: EdgeKind;                  // v1 uses 'parent' and 'branch' only
+  anchor?: TextAnchor;             // present when a branch came from a selection within the parent
 }
 
 export interface View {
@@ -102,6 +109,17 @@ If a task seems to need one of these, stop and flag it rather than building it.
 - Small, reviewable commits — one per acceptance criterion.
 - No `any` in `src/core`.
 
+## Testing policy
+
+Test by layer, not uniformly. Coverage value is highest in `src/core` (pure, cheap, bugs are silent) and lowest in `src/ui` (expensive, brittle, catches little). Match effort to that gradient.
+
+- **Tooling:** Vitest for unit + integration. React Testing Library for the few UI tests. Not Jest — Vitest shares Vite config and is faster. Tests live next to the code as `*.test.ts(x)`.
+- **`src/core` — thorough unit tests.** Every graph operation, with edge cases: `branchFrom`, `addEdge`, `deleteThought` (must cascade to incident edges), and later `buildContext` (ancestor walk: root, single node, deep chain, branch point). Pure in / pure out, no mocks. This is where the bulk of tests live.
+- **`src/adapters` + `src/store` — targeted integration tests.** Store round-trip (build base → save → reload → assert deep-equal, including positions). Empty-store hydration seeds one root thought. Later: `LLMProvider` is called with correctly assembled messages (mock the network; never hit the real API in tests). A dozen meaningful tests, not hundreds.
+- **`src/ui` — thin smoke layer, deferred to Session 3.** A couple of tests that the canvas renders and that create/branch fire the right store actions. Not pixel-level. Do not write extensive UI tests while interactions are still moving.
+- **Don't test framework internals** (React Flow, zustand, idb-keyval). Test our logic, not theirs.
+- `npm test` runs the full suite; it must pass before any commit that closes an acceptance criterion.
+
 ## Build sequence
 
 - **Session 1 (current):** skeleton + data model + canvas with create / edit / drag / persist. No AI.
@@ -109,3 +127,7 @@ If a task seems to need one of these, stop and flag it rather than building it.
 - **Session 3:** navigation polish — dagre auto-layout, fit-to-view, keyboard traversal (parent/child/sibling), dark/monospace aesthetic.
 - **Layer 2 (later):** slash-command registry (`/challenge`, `/answer`, `/question`, `/extend`), manual `/connect` (draw a `link` edge between two selected thoughts), `/neutralize` de-biasing transform, question/statement auto-routing.
 - **Layer 3 (later):** document (materialized linear view), embeddings + retrieval, pattern extraction, background daemon + ripples, barometer.
+
+## Open model questions (do not resolve yet)
+
+- **Thought-as-text vs thought-as-blocks.** A `Thought` is currently one markdown blob. The richer model (cf. the prior Conversation Tree app) is an ordered list of addressable blocks (paragraphs/lines), so any block is independently branchable, highlightable, and foldable. The `Edge.anchor` field is the bridge — it gives span-precise branching against the text model today without blocking a move to blocks later. Revisit when selection-branching UI and the document view are built (Layer 2). Do not refactor to blocks pre-emptively.

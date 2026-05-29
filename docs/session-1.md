@@ -28,7 +28,7 @@ Read `CLAUDE.md` first. This brief is scoped to satisfy its Session 1 entry.
 
 ## Out of scope (do not build)
 
-Anything AI or network. dagre auto-layout (manual drag only this session). Slash commands. Document view. Keyboard traversal beyond React Flow defaults. Styling beyond clean/legible.
+Anything AI or network. dagre auto-layout (manual drag only this session). Slash commands. Document view. Keyboard traversal beyond React Flow defaults. Styling beyond clean/legible. **UI tests** — deferred to Session 3 per the testing policy in `CLAUDE.md`; this session tests core and the store adapter only.
 
 ## Acceptance criteria
 
@@ -39,6 +39,9 @@ Anything AI or network. dagre auto-layout (manual drag only this session). Slash
 5. Full state (thoughts, edges, positions) persists to IndexedDB and restores on reload.
 6. No React / React Flow / IndexedDB imports inside `src/core`. Persistence and LLM access only via the interfaces in `src/adapters`.
 7. `tsc --noEmit` passes under strict mode; no `any` in `src/core`.
+8. Vitest is set up; `npm test` runs the suite.
+9. Unit tests for every `src/core` graph operation, including: `branchFrom` creates a child thought plus a `branch` edge; `deleteThought` removes the thought **and** all incident edges (no dangling edges); `addEdge` rejects or ignores duplicates. Cover empty/single/deep cases.
+10. Integration test: build a base, save through the `Store`, reload, and assert the restored `{ base, views }` deep-equals the original (positions included). Plus: hydrating from an empty store seeds exactly one root `user` thought.
 
 ## Notes
 
