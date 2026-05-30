@@ -114,9 +114,6 @@ body,
 .thought-node--ai {
   border-left-color: #3b82f6;
 }
-.thought-node--note {
-  border-left-color: #9ca3af;
-}
 
 .thought-node__chrome {
   display: flex;
@@ -126,12 +123,15 @@ body,
   margin-bottom: 6px;
 }
 
-.thought-node__kind {
-  font: 10px/1 var(--mono, monospace);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text, #888);
-  opacity: 0.45; /* low-contrast indicator */
+/* No text kind-label; just a faint dot on ai nodes (user has none). */
+.thought-node__marker {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.thought-node__marker.is-ai {
+  background: #3b82f6;
+  opacity: 0.5;
 }
 
 /* Actions rest hidden — a resting node is just text + accent. */

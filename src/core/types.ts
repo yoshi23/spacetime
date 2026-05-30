@@ -3,7 +3,7 @@ export type EdgeKind = 'parent' | 'branch' | 'link' | 'merge';
 
 export interface Thought {
   id: ThoughtId;
-  kind: 'user' | 'ai' | 'note';
+  kind: 'user' | 'ai';
   content: string;                 // markdown
   viewId: string;                  // home canvas; a SOFT label, not a hard partition
   createdAt: number;

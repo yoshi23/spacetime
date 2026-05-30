@@ -33,6 +33,7 @@ export interface Thought {
   id: ThoughtId;
   kind: 'user' | 'ai' | 'note';
   content: string;                 // markdown
+  viewId: string;                  // home canvas — membership + provenance (soft label, see below)
   createdAt: number;
   updatedAt: number;
   meta?: { model?: string; command?: string; tokens?: number };
@@ -53,7 +54,7 @@ export interface Edge {
   anchor?: TextAnchor;             // present when a branch came from a selection within the parent
 }
 
-export interface View {
+export interface View {           // = a canvas = a brainstorm = a conversation
   id: string;
   name: string;
   layout: Record<ThoughtId, { x: number; y: number }>;  // position overrides
@@ -131,3 +132,9 @@ Test by layer, not uniformly. Coverage value is highest in `src/core` (pure, che
 ## Open model questions (do not resolve yet)
 
 - **Thought-as-text vs thought-as-blocks.** A `Thought` is currently one markdown blob. The richer model (cf. the prior Conversation Tree app) is an ordered list of addressable blocks (paragraphs/lines), so any block is independently branchable, highlightable, and foldable. The `Edge.anchor` field is the bridge — it gives span-precise branching against the text model today without blocking a move to blocks later. Revisit when selection-branching UI and the document view are built (Layer 2). Do not refactor to blocks pre-emptively.
+
+- **Context compaction (LLM context, not canvas).** `buildMessages()` sends the full root→node path. Branching is the first-line defense: each tangent lives on its own branch, so the path to any node stays short even when the whole base is large. When paths do get long, the strategy hierarchy is: (1) path-to-root only — current; (2) token-budgeted trimming — keep root + recent verbatim, compact the oldest middle nodes, no extra LLM calls; (3) summarized intermediate nodes — cached LLM summaries replacing stale middle nodes, real infra, only if trimming loses fidelity. Don't build until real paths approach the window; add a per-path token readout (Session 3) to know when that is.
+
+## North star — why this beats chatbot memory
+
+The long-term advantage is a **structural-first memory layer.** Chatbot memory is bolted onto a flat transcript: it must infer structure after the fact (chunk → embed → guess relationships → retrieve by similarity), reconstructing structure that was discarded at capture time. SpaceTime captures structure *as it is created* — anchors record which line spawned a thought, edges record branches/tangents/alternatives, lineages record trains of thought. So retrieval can be **structural first** (walk the graph) and **semantic second** (embeddings as refinement), rather than semantic-only over a flat log. Every preserved-structure decision (soft `viewId`, `anchor`, explicit `Edge`s, globally-queryable base) is an investment in this. The discipline that pays it off: keep capturing structure faithfully and keep the base globally queryable. Builds in Layer 3, once the base holds weeks of real thinking.

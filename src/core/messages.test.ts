@@ -51,13 +51,13 @@ describe('buildMessages', () => {
     ]);
   });
 
-  it('maps note → user and merges consecutive same-role thoughts', () => {
-    // user 'a' → note 'b' (branch) → user question 'c'; all three are `user`
+  it('merges consecutive same-role (user) thoughts', () => {
+    // user 'a' → user 'b' (branch) → user question 'c'; all three are `user`
     // role and must collapse into a single message before the ai turn.
     const b = base(
       [
         thought('a', 'user', 'first'),
-        thought('b', 'note', 'a note'),
+        thought('b', 'user', 'a note'),
         thought('c', 'user', 'second'),
         thought('d', 'ai', 'answer'),
       ],
@@ -70,12 +70,12 @@ describe('buildMessages', () => {
   });
 
   it('walks to a branch point and starts with user', () => {
-    // a(user) → b(ai); branch from b → c(note). Context for c = a,b,c.
+    // a(user) → b(ai); branch from b → c(user). Context for c = a,b,c.
     const b = base(
       [
         thought('a', 'user', 'root q'),
         thought('b', 'ai', 'reply'),
-        thought('c', 'note', 'my aside'),
+        thought('c', 'user', 'my aside'),
       ],
       [lineage('a', 'b'), lineage('b', 'c', 'branch')],
     );
@@ -93,7 +93,7 @@ describe('buildMessages', () => {
     const b = base(
       [
         thought('a', 'user', 'hello world, how are you'),
-        thought('b', 'note', 'tell me about this'),
+        thought('b', 'user', 'tell me about this'),
       ],
       [lineage('a', 'b', 'branch', anchor)],
     );
@@ -111,7 +111,7 @@ describe('buildMessages', () => {
       [
         thought('a', 'user', 'cats are great'),
         thought('b', 'ai', 'indeed'),
-        thought('c', 'note', 'more on cats'),
+        thought('c', 'user', 'more on cats'),
       ],
       [lineage('a', 'b'), lineage('b', 'c', 'branch', anchor)],
     );

@@ -3,16 +3,22 @@ import { AnthropicProvider, DEFAULT_MODEL } from './anthropic';
 import type { MessagesClient } from './anthropic';
 import type { LLMMessage } from './llm';
 
+type CreateBody = Parameters<MessagesClient['messages']['create']>[0];
+
 // Fake client capturing the request body — no network, ever.
 function fakeClient(text = 'hi there') {
-  const create = vi.fn(async () => ({
-    content: [
-      { type: 'text', text },
-      { type: 'tool_use' }, // ignored by the text extractor
-    ],
-  }));
+  const calls: CreateBody[] = [];
+  const create = vi.fn(async (body: CreateBody) => {
+    calls.push(body);
+    return {
+      content: [
+        { type: 'text', text },
+        { type: 'tool_use' }, // ignored by the text extractor
+      ],
+    };
+  });
   const client: MessagesClient = { messages: { create } };
-  return { client, create };
+  return { client, create, calls };
 }
 
 const MESSAGES: LLMMessage[] = [
@@ -43,12 +49,12 @@ describe('AnthropicProvider', () => {
   });
 
   it('omits system when not provided and respects a model override', async () => {
-    const { client, create } = fakeClient();
+    const { client, calls } = fakeClient();
     const provider = new AnthropicProvider({ client, model: 'claude-haiku-4-5-20251001' });
 
     await provider.complete([{ role: 'user', content: 'hi' }], { maxTokens: 2048 });
 
-    const body = create.mock.calls[0][0];
+    const body = calls[0];
     expect(body.model).toBe('claude-haiku-4-5-20251001');
     expect(body.max_tokens).toBe(2048);
     expect('system' in body).toBe(false);

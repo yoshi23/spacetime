@@ -25,7 +25,6 @@ const nodeTypes: NodeTypes = { thought: ThoughtNode };
 const KIND_COLOR: Record<string, string> = {
   user: '#aa3bff',
   ai: '#3b82f6',
-  note: '#9ca3af',
 };
 
 function miniMapNodeColor(node: RFNode): string {

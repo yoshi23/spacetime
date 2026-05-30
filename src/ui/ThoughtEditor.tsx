@@ -110,7 +110,8 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
   return (
     <>
       <div className="thought-node__chrome">
-        <span className="thought-node__kind">{thought.kind}</span>
+        {/* Kind is conveyed by the left accent bar; keep only a faint dot on ai. */}
+        <span className={`thought-node__marker${thought.kind === 'ai' ? ' is-ai' : ''}`} aria-hidden="true" />
         <span className="thought-node__actions">
           <button
             type="button"

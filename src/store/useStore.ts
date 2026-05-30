@@ -97,16 +97,21 @@ function seedState(deps: GraphDeps): Required<Pick<PersistedState, 'base' | 'vie
   return { base, views: [view], settings: DEFAULT_SETTINGS, activeViewId: DEFAULT_VIEW_ID };
 }
 
-// Backfill viewId on thoughts from a pre-multi-view blob: any thought without
-// a home canvas is migrated into the default view.
-function migrateThoughtViewIds(base: Base, fallbackViewId: string): Base {
+// Migrate thoughts from older blobs: backfill a missing viewId (pre-multi-view)
+// into the default view, and remap the retired `note` kind to `user`.
+function migrateThoughts(base: Base, fallbackViewId: string): Base {
   let changed = false;
   const thoughts: Base['thoughts'] = {};
   for (const [id, t] of Object.entries(base.thoughts)) {
-    if (t.viewId) {
+    const legacyKind = (t.kind as string) === 'note';
+    if (t.viewId && !legacyKind) {
       thoughts[id] = t;
     } else {
-      thoughts[id] = { ...t, viewId: fallbackViewId };
+      thoughts[id] = {
+        ...t,
+        viewId: t.viewId ?? fallbackViewId,
+        kind: legacyKind ? 'user' : t.kind,
+      };
       changed = true;
     }
   }
@@ -183,7 +188,7 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
             ? loaded.activeViewId
             : fallbackViewId;
         set({
-          base: migrateThoughtViewIds(loaded.base, fallbackViewId),
+          base: migrateThoughts(loaded.base, fallbackViewId),
           views,
           activeViewId,
           settings: loaded.settings ?? DEFAULT_SETTINGS,

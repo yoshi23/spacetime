@@ -26,7 +26,7 @@ function contribution(content: string, anchor: TextAnchor | undefined): string {
 
 /**
  * Assemble the ordered ancestor path root → nodeId into an Anthropic-shaped
- * message list: roles mapped (ai → assistant, user/note → user), consecutive
+ * message list: roles mapped (ai → assistant, user → user), consecutive
  * same-role thoughts merged (joined with "\n\n"), starting with `user` and
  * strictly alternating. Returns [] for an unknown node.
  */

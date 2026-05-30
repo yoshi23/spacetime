@@ -92,6 +92,25 @@ describe('hydrate', () => {
     expect(s.getState().base.thoughts['a'].viewId).toBe('v_canvas');
     expect(s.getState().activeViewId).toBe('v_canvas');
   });
+
+  it('migrates retired note thoughts to user on hydrate', async () => {
+    const old = {
+      base: {
+        thoughts: {
+          a: { id: 'a', kind: 'note', content: 'aside', viewId: 'v_canvas', createdAt: 1, updatedAt: 1 },
+          b: { id: 'b', kind: 'user', content: 'q', viewId: 'v_canvas', createdAt: 1, updatedAt: 1 },
+        },
+        edges: [],
+      },
+      views: [{ id: 'v_canvas', name: 'Canvas', layout: { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } } }],
+      activeViewId: 'v_canvas',
+    } as unknown as PersistedState;
+    const store = new FakeStore(old);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    expect(s.getState().base.thoughts['a'].kind).toBe('user');
+    expect(s.getState().base.thoughts['b'].kind).toBe('user');
+  });
 });
 
 describe('store actions persist through the Store', () => {
@@ -280,10 +299,10 @@ describe('views (canvases)', () => {
     const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
     await s.getState().hydrate();
     const v1 = s.getState().activeViewId;
-    const a = s.getState().addThought('note', { x: 0, y: 0 }); // in v1
+    const a = s.getState().addThought('user', { x: 0, y: 0 }); // in v1
 
     const v2 = s.getState().createView(); // switches active to v2
-    const b = s.getState().addThought('note', { x: 0, y: 0 }); // in v2
+    const b = s.getState().addThought('user', { x: 0, y: 0 }); // in v2
 
     const inV1 = Object.values(s.getState().base.thoughts).filter((t) => t.viewId === v1);
     const inV2 = Object.values(s.getState().base.thoughts).filter((t) => t.viewId === v2);

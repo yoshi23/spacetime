@@ -84,7 +84,7 @@ export function addEdge(
   return { base: { ...base, edges: [...base.edges, edge] }, edge };
 }
 
-// Branch off a parent: create a child `note` thought and a `branch` edge
+// Branch off a parent: create a child `user` thought and a `branch` edge
 // from parent → child. An optional anchor records the selection within the
 // parent the branch came from; omitting it means a whole-thought branch.
 export function branchFrom(
@@ -96,7 +96,7 @@ export function branchFrom(
   const parent = base.thoughts[parentId];
   if (!parent) return { base, child: null, edge: null };
   // A branch lives in the same canvas as its parent.
-  const created = addThought(base, 'note', parent.viewId, deps);
+  const created = addThought(base, 'user', parent.viewId, deps);
   const withEdge = addEdge(created.base, parentId, created.thought.id, 'branch', deps, anchor);
   return { base: withEdge.base, child: created.thought, edge: withEdge.edge };
 }

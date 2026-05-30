@@ -41,7 +41,7 @@ describe('addThought', () => {
   it('does not mutate the input base', () => {
     const deps = makeDeps();
     const start = emptyBase();
-    addThought(start, 'note', V, deps);
+    addThought(start, 'ai', V, deps);
     expect(Object.keys(start.thoughts)).toHaveLength(0);
   });
 });
@@ -68,7 +68,7 @@ describe('thoughtsForView', () => {
   it('returns only thoughts homed in the given view', () => {
     const deps = makeDeps();
     let b = addThought(emptyBase(), 'user', 'va', deps).base; // id1 in va
-    b = addThought(b, 'note', 'vb', deps).base; // id2 in vb
+    b = addThought(b, 'ai', 'vb', deps).base; // id2 in vb
     b = addThought(b, 'user', 'va', deps).base; // id3 in va
 
     expect(thoughtsForView(b, 'va').map((t) => t.id).sort()).toEqual(['id1', 'id3']);
@@ -93,7 +93,7 @@ describe('addEdge', () => {
   it('adds an edge between two existing thoughts', () => {
     const deps = makeDeps();
     let b = addThought(emptyBase(), 'user', V, deps).base;
-    b = addThought(b, 'note', V, deps).base;
+    b = addThought(b, 'ai', V, deps).base;
     const { base, edge } = addEdge(b, 'id1', 'id2', 'branch', deps);
     expect(edge).not.toBeNull();
     expect(base.edges).toHaveLength(1);
@@ -103,7 +103,7 @@ describe('addEdge', () => {
   it('ignores duplicates with the same source+target+kind', () => {
     const deps = makeDeps();
     let b = addThought(emptyBase(), 'user', V, deps).base;
-    b = addThought(b, 'note', V, deps).base;
+    b = addThought(b, 'ai', V, deps).base;
     b = addEdge(b, 'id1', 'id2', 'branch', deps).base;
     const { base, edge } = addEdge(b, 'id1', 'id2', 'branch', deps);
     expect(edge).toBeNull();
@@ -113,7 +113,7 @@ describe('addEdge', () => {
   it('allows the same source+target with a different kind', () => {
     const deps = makeDeps();
     let b = addThought(emptyBase(), 'user', V, deps).base;
-    b = addThought(b, 'note', V, deps).base;
+    b = addThought(b, 'ai', V, deps).base;
     b = addEdge(b, 'id1', 'id2', 'branch', deps).base;
     const { base } = addEdge(b, 'id1', 'id2', 'link', deps);
     expect(base.edges).toHaveLength(2);
@@ -122,7 +122,7 @@ describe('addEdge', () => {
   it('allows a cross-view edge (viewId is a soft label, not a partition)', () => {
     const deps = makeDeps();
     let b = addThought(emptyBase(), 'user', 'va', deps).base; // id1
-    b = addThought(b, 'note', 'vb', deps).base; // id2 in a different view
+    b = addThought(b, 'ai', 'vb', deps).base; // id2 in a different view
     const { base, edge } = addEdge(b, 'id1', 'id2', 'link', deps);
     expect(edge).not.toBeNull();
     expect(base.edges).toHaveLength(1);
@@ -138,12 +138,12 @@ describe('addEdge', () => {
 });
 
 describe('branchFrom', () => {
-  it('creates a child note thought plus a branch edge', () => {
+  it('creates a child user thought plus a branch edge', () => {
     const deps = makeDeps();
     const root = addThought(emptyBase(), 'user', V, deps).base; // id1
     const { base, child, edge } = branchFrom(root, 'id1', deps);
     expect(child).not.toBeNull();
-    expect(child!.kind).toBe('note');
+    expect(child!.kind).toBe('user');
     expect(Object.keys(base.thoughts)).toHaveLength(2);
     expect(edge).toMatchObject({ source: 'id1', target: child!.id, kind: 'branch' });
     expect(base.edges).toHaveLength(1);
