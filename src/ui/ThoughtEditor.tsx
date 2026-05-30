@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useStore } from '../store/useStore';
 import type { TextAnchor, ThoughtId } from '../core/types';
+import { MarkdownView, type SelectionAnchor } from './MarkdownView';
 
 interface Segment {
   text: string;
@@ -63,6 +64,8 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
     [edges, id, selectedThoughtId],
   );
 
+  const isAi = thought?.kind === 'ai';
+
   const segments = useMemo(() => {
     if (!originEdge) return anchorSegments(content, []);
     const anchor: TextAnchor =
@@ -70,7 +73,15 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
     return anchorSegments(content, [anchor]);
   }, [content, originEdge]);
 
-  // Live text selection within the textarea ({start,end}, collapsed → null).
+  // For ai (rendered) nodes, the origin highlight is a source-offset range.
+  const highlightRange = useMemo(() => {
+    if (!originEdge) return null;
+    return originEdge.anchor
+      ? { start: originEdge.anchor.start, end: originEdge.anchor.end }
+      : { start: 0, end: content.length };
+  }, [originEdge, content]);
+
+  // Live text selection ({start,end} in source offsets, collapsed → null).
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
 
   const onSelect = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -78,6 +89,11 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
     const start = el.selectionStart;
     const end = el.selectionEnd;
     setSelection(start != null && end != null && start < end ? { start, end } : null);
+  }, []);
+
+  // Rendered ai node: selection already mapped to source offsets.
+  const onSelectAnchor = useCallback((anchor: SelectionAnchor | null) => {
+    setSelection(anchor ? { start: anchor.start, end: anchor.end } : null);
   }, []);
 
   const onChange = useCallback(
@@ -135,29 +151,40 @@ export function ThoughtEditor({ id }: { id: ThoughtId }) {
       </div>
 
       <div className="thought-node__editor">
-        {/* Backdrop mirror: same metrics as the textarea, transparent text,
-            only <mark> backgrounds show through behind the live text. */}
-        <div className="thought-node__backdrop" aria-hidden="true">
-          {segments.map((seg, i) =>
-            seg.mark ? (
-              <mark key={i} className="thought-node__mark">
-                {seg.text}
-              </mark>
-            ) : (
-              <span key={i}>{seg.text}</span>
-            ),
-          )}
-        </div>
-        <textarea
-          className="thought-node__text nodrag"
-          value={content}
-          placeholder="Type a thought…"
-          onChange={onChange}
-          onSelect={onSelect}
-          onKeyDown={onKeyDown}
-          // keep React Flow from hijacking text interactions
-          onMouseDown={(e) => e.stopPropagation()}
-        />
+        {isAi ? (
+          // ai nodes are read-only markdown output (selection-branchable).
+          <MarkdownView
+            content={content}
+            highlight={highlightRange}
+            onSelectAnchor={onSelectAnchor}
+          />
+        ) : (
+          <>
+            {/* Backdrop mirror: same metrics as the textarea, transparent
+                text, only <mark> backgrounds show through behind it. */}
+            <div className="thought-node__backdrop" aria-hidden="true">
+              {segments.map((seg, i) =>
+                seg.mark ? (
+                  <mark key={i} className="thought-node__mark">
+                    {seg.text}
+                  </mark>
+                ) : (
+                  <span key={i}>{seg.text}</span>
+                ),
+              )}
+            </div>
+            <textarea
+              className="thought-node__text nodrag"
+              value={content}
+              placeholder="Type a thought…"
+              onChange={onChange}
+              onSelect={onSelect}
+              onKeyDown={onKeyDown}
+              // keep React Flow from hijacking text interactions
+              onMouseDown={(e) => e.stopPropagation()}
+            />
+          </>
+        )}
         {selection && (
           <button
             type="button"
