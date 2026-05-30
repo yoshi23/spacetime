@@ -84,19 +84,25 @@ body,
    kind conveyed by the left accent bar + a small low-contrast label, and
    chrome (actions, resize) revealed only on hover. */
 .thought-node {
-  width: 240px;
+  /* Size is driven by two vars so selection can scale the whole node 30%. */
+  --node-width: 480px;
+  --node-font: 13px;
+  width: var(--node-width);
   /* ~3% tint of the canvas so the container nearly disappears */
   background: color-mix(in srgb, var(--text, #888) 3%, var(--bg, #fff));
   border: 1px solid transparent;
   border-left: 4px solid var(--accent, #aa3bff);
   border-radius: 6px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); /* barely perceptible */
-  font: 13px/1.5 var(--sans, system-ui);
+  font: var(--node-font) / 1.5 var(--sans, system-ui);
   padding: 12px 14px 12px 16px; /* generous; extra left clears the accent */
+  transition: width 0.12s ease;
 }
 
-/* Selection must stay clearly visible against the faint resting container. */
+/* Selection: clearly visible ring + grow the whole node ~30%. */
 .thought-node.is-selected {
+  --node-width: 624px; /* 480 * 1.3 */
+  --node-font: 16.9px; /* 13 * 1.3 */
   border-color: transparent;
   box-shadow: 0 0 0 2px var(--accent-border, rgba(170, 59, 255, 0.5));
 }
@@ -167,10 +173,12 @@ body,
   box-sizing: border-box;
   width: 100%;
   min-height: 56px;
+  /* Grow with the text up to ~50 lines (line-height 1.5), then scroll. */
+  max-height: calc(50 * 1.5 * var(--node-font));
   margin: 0;
   padding: 0; /* generous padding now lives on the node */
   border: none;
-  font: 13px/1.5 var(--sans, system-ui);
+  font: var(--node-font) / 1.5 var(--sans, system-ui);
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
@@ -179,13 +187,13 @@ body,
   display: block;
   position: relative;
   z-index: 1;
-  resize: none; /* resize handle revealed on hover only */
+  /* Auto-size the textarea to its content (capped by max-height above). */
+  field-sizing: content;
+  resize: none;
+  overflow-y: auto;
   outline: none;
   background: transparent;
   color: var(--text-h, #111);
-}
-.thought-node:hover .thought-node__text {
-  resize: vertical;
 }
 
 .thought-node__backdrop {
