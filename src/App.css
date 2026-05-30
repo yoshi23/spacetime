@@ -116,6 +116,25 @@ body,
   font-weight: 500;
 }
 
+.top-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.tidy-btn {
+  border: 1px solid var(--border, #d9d9d9);
+  background: var(--bg, #fff);
+  color: var(--text-h, #111);
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: 11px var(--mono, monospace);
+}
+.tidy-btn:hover {
+  border-color: var(--accent, #aa3bff);
+  color: var(--accent, #aa3bff);
+}
+
 /* Per-workspace short/long response toggle (canvas panel). */
 .length-toggle {
   display: inline-flex;

@@ -30,6 +30,8 @@ export interface View {
   id: string;
   name: string;
   layout: Record<ThoughtId, { x: number; y: number }>;  // position overrides
+  // Thoughts the user manually placed (dragged); excluded from auto-layout.
+  pinned?: Record<ThoughtId, true>;
 }
 
 export interface Base {

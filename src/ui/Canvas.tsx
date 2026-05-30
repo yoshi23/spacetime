@@ -17,6 +17,7 @@ import { useStore } from '../store/useStore';
 import { ThoughtNode } from './ThoughtNode';
 import type { ThoughtNodeData } from './ThoughtNode';
 import { Sidebar } from './Sidebar';
+import { layoutTree, type LayoutEdge, type LayoutNode } from '../core/layout';
 
 const nodeTypes: NodeTypes = { thought: ThoughtNode };
 
@@ -42,7 +43,8 @@ function Flow() {
   const setSelectedThought = useStore((s) => s.setSelectedThought);
   const responseLength = useStore((s) => s.settings.responseLength);
   const setResponseLength = useStore((s) => s.setResponseLength);
-  const { screenToFlowPosition } = useReactFlow();
+  const applyLayout = useStore((s) => s.applyLayout);
+  const { screenToFlowPosition, getNodes, fitView } = useReactFlow();
 
   const layout = useMemo(
     () => views.find((v) => v.id === activeViewId)?.layout ?? {},
@@ -94,6 +96,46 @@ function Flow() {
     [moveThought],
   );
 
+  // Tidy: collision-free dagre reflow of the active canvas using measured
+  // node sizes. Pinned (manually-dragged) nodes stay put.
+  const onTidy = useCallback(() => {
+    const view = views.find((v) => v.id === activeViewId);
+    const pinned = view?.pinned ?? {};
+    const sizeById = new Map(
+      getNodes().map((n) => [
+        n.id,
+        { width: n.measured?.width ?? 480, height: n.measured?.height ?? 120 },
+      ]),
+    );
+    const visible = Object.values(base.thoughts).filter((t) => t.viewId === activeViewId);
+    const visibleIds = new Set(visible.map((t) => t.id));
+
+    const layoutNodes: LayoutNode[] = visible.map((t) => ({
+      id: t.id,
+      size: sizeById.get(t.id) ?? { width: 480, height: 120 },
+      pinned: !!pinned[t.id],
+      position: view?.layout[t.id],
+    }));
+    const layoutEdges: LayoutEdge[] = base.edges
+      .filter(
+        (e) =>
+          (e.kind === 'parent' || e.kind === 'branch') &&
+          visibleIds.has(e.source) &&
+          visibleIds.has(e.target),
+      )
+      .map((e) => ({
+        source: e.source,
+        target: e.target,
+        anchorFraction: e.anchor
+          ? e.anchor.start / Math.max(1, base.thoughts[e.source]?.content.length ?? 1)
+          : undefined,
+      }));
+
+    applyLayout(layoutTree(layoutNodes, layoutEdges));
+    // Let the store-driven positions settle, then frame them.
+    setTimeout(() => fitView({ duration: 300, padding: 0.2 }), 0);
+  }, [views, activeViewId, base.thoughts, base.edges, getNodes, applyLayout, fitView]);
+
   // Track the selected node so a parent can highlight where a selected
   // child branched from.
   const onSelectionChange = useCallback(
@@ -132,7 +174,10 @@ function Flow() {
         zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Panel position="top-right">
+        <Panel position="top-right" className="top-controls">
+          <button type="button" className="tidy-btn" title="Tidy layout" onClick={onTidy}>
+            ✦ Tidy
+          </button>
           <div className="length-toggle" role="group" aria-label="Response length">
             <button
               type="button"

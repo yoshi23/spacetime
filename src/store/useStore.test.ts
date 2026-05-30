@@ -276,6 +276,47 @@ describe('short/long response length', () => {
   });
 });
 
+describe('pinning + layout', () => {
+  it('moveThought pins the node (excluded from auto-layout)', async () => {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    const a = s.getState().addThought('user', { x: 0, y: 0 });
+    // a fresh, auto-placed node is not pinned
+    expect(s.getState().views[0].pinned?.[a]).toBeUndefined();
+
+    s.getState().moveThought(a, { x: 50, y: 60 });
+    expect(s.getState().views[0].pinned?.[a]).toBe(true);
+    expect(s.getState().views[0].layout[a]).toEqual({ x: 50, y: 60 });
+  });
+
+  it('applyLayout writes positions without pinning', async () => {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    const a = s.getState().addThought('user', { x: 0, y: 0 });
+    const b = s.getState().addThought('user', { x: 0, y: 0 });
+
+    s.getState().applyLayout({ [a]: { x: 10, y: 20 }, [b]: { x: 300, y: 20 } });
+    expect(s.getState().views[0].layout[a]).toEqual({ x: 10, y: 20 });
+    expect(s.getState().views[0].layout[b]).toEqual({ x: 300, y: 20 });
+    // Tidy does not pin
+    expect(s.getState().views[0].pinned?.[a]).toBeUndefined();
+    expect(s.getState().views[0].pinned?.[b]).toBeUndefined();
+  });
+
+  it('deleteThought clears the pin', async () => {
+    const store = new FakeStore(null);
+    const s = createSpaceTimeStore({ store, deps: makeDeps(), ...NO_DEBOUNCE });
+    await s.getState().hydrate();
+    const a = s.getState().addThought('user', { x: 0, y: 0 });
+    s.getState().moveThought(a, { x: 9, y: 9 });
+    expect(s.getState().views[0].pinned?.[a]).toBe(true);
+    s.getState().deleteThought(a);
+    expect(s.getState().views[0].pinned?.[a]).toBeUndefined();
+  });
+});
+
 describe('views (canvases)', () => {
   it('createView adds a view, switches to it, and seeds exactly one root user thought', async () => {
     const store = new FakeStore(null);

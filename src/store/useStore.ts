@@ -20,6 +20,7 @@ import {
 } from '../core/graph';
 import type { GraphDeps } from '../core/graph';
 import { buildMessages } from '../core/messages';
+import { estimateHeight } from '../core/layout';
 import { defaultClock, defaultIdGen } from '../core/ids';
 import { IndexedDBStore } from '../adapters/store';
 import type { PersistedState, Store } from '../adapters/store';
@@ -59,12 +60,14 @@ export interface SpaceTimeState {
   // Canvas management. One View = one canvas = one conversation.
   setActiveView: (viewId: string) => void;
   createView: () => string;
+  // Tidy: write computed positions into the active view (does not pin).
+  applyLayout: (positions: Record<ThoughtId, Position>) => void;
 }
 
 const DEFAULT_VIEW_ID = 'v_canvas';
-const BRANCH_OFFSET: Position = { x: 60, y: 120 };
-// Where an AI reply lands relative to its source node.
-const AI_OFFSET: Position = { x: 0, y: 160 };
+// Sensible initial placement below a parent (precise reflow is the Tidy pass).
+const CHILD_GAP = 48; // vertical gap below the parent's estimated bottom
+const SIBLING_DX = 120; // horizontal cascade per existing child
 
 const DEFAULT_SETTINGS: Settings = { responseLength: 'long' };
 
@@ -164,6 +167,22 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
       );
     }
 
+    // Sensible initial spot for a new child: below the parent's estimated
+    // bottom, cascading horizontally per existing child. Precise, collision-
+    // free arrangement is the on-demand Tidy (layoutTree) pass.
+    function childPosition(parentId: ThoughtId): Position {
+      const parent = get().base.thoughts[parentId];
+      const parentPos = activeView().layout[parentId] ?? { x: 0, y: 0 };
+      const parentHeight = parent ? estimateHeight(parent.content) : 80;
+      const siblings = get().base.edges.filter(
+        (e) => e.source === parentId && (e.kind === 'parent' || e.kind === 'branch'),
+      ).length;
+      return {
+        x: parentPos.x + siblings * SIBLING_DX,
+        y: parentPos.y + parentHeight + CHILD_GAP,
+      };
+    }
+
     return {
       base: emptyBase(),
       views: [defaultView()],
@@ -209,7 +228,18 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
       },
 
       moveThought(id, position) {
-        set({ views: setLayout(id, position) });
+        // A manual drag pins the node, excluding it from auto-layout (Tidy).
+        const { views, activeViewId } = get();
+        const next = views.map((v) =>
+          v.id === activeViewId
+            ? {
+                ...v,
+                layout: { ...v.layout, [id]: position },
+                pinned: { ...v.pinned, [id]: true as const },
+              }
+            : v,
+        );
+        set({ views: next });
         scheduleSave();
       },
 
@@ -219,14 +249,10 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
       },
 
       branchFrom(parentId, anchor) {
+        const position = childPosition(parentId);
         const { base, child } = branchFromOp(get().base, parentId, deps, anchor);
         if (!child) return null;
-        const parentPos = activeView().layout[parentId] ?? { x: 0, y: 0 };
-        const views = setLayout(child.id, {
-          x: parentPos.x + BRANCH_OFFSET.x,
-          y: parentPos.y + BRANCH_OFFSET.y,
-        });
-        commit(base, views);
+        commit(base, setLayout(child.id, position));
         return child.id;
       },
 
@@ -239,13 +265,20 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
           delete layout[id];
           return { ...v, layout };
         });
+        // Also drop any pin for the deleted thought.
+        const cleaned = views.map((v) => {
+          if (!v.pinned || !(id in v.pinned)) return v;
+          const pinned = { ...v.pinned };
+          delete pinned[id];
+          return { ...v, pinned };
+        });
         if (get().selectedThoughtId === id) set({ selectedThoughtId: null });
         if (get().aiStatus[id]) {
           const next = { ...get().aiStatus };
           delete next[id];
           set({ aiStatus: next });
         }
-        commit(base, views);
+        commit(base, cleaned);
       },
 
       setSelectedThought(id) {
@@ -281,6 +314,15 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
         return viewId;
       },
 
+      applyLayout(positions) {
+        const { views, activeViewId } = get();
+        const next = views.map((v) =>
+          v.id === activeViewId ? { ...v, layout: { ...v.layout, ...positions } } : v,
+        );
+        set({ views: next });
+        scheduleSave();
+      },
+
       async respondTo(nodeId) {
         const source = get().base.thoughts[nodeId];
         if (!source) return null;
@@ -288,16 +330,12 @@ export function createSpaceTimeStore(config: StoreConfig = {}) {
         if (messages.length === 0) return null;
 
         // Create the pending ai child (same canvas as its source) + parent edge.
+        const position = childPosition(nodeId);
         const created = addThoughtOp(get().base, 'ai', source.viewId, deps);
         const childId = created.thought.id;
         const withEdge = addEdgeOp(created.base, nodeId, childId, 'parent', deps);
-        const parentPos = activeView().layout[nodeId] ?? { x: 0, y: 0 };
-        const views = setLayout(childId, {
-          x: parentPos.x + AI_OFFSET.x,
-          y: parentPos.y + AI_OFFSET.y,
-        });
         set({ aiStatus: { ...get().aiStatus, [childId]: { loading: true } } });
-        commit(withEdge.base, views);
+        commit(withEdge.base, setLayout(childId, position));
 
         const preset = RESPONSE_PRESETS[get().settings.responseLength];
         try {
