@@ -16,6 +16,7 @@ import '@xyflow/react/dist/style.css';
 import { useStore } from '../store/useStore';
 import { ThoughtNode } from './ThoughtNode';
 import type { ThoughtNodeData } from './ThoughtNode';
+import { Sidebar } from './Sidebar';
 
 const nodeTypes: NodeTypes = { thought: ThoughtNode };
 
@@ -41,8 +42,6 @@ function Flow() {
   const setSelectedThought = useStore((s) => s.setSelectedThought);
   const responseLength = useStore((s) => s.settings.responseLength);
   const setResponseLength = useStore((s) => s.setResponseLength);
-  const setActiveView = useStore((s) => s.setActiveView);
-  const createView = useStore((s) => s.createView);
   const { screenToFlowPosition } = useReactFlow();
 
   const layout = useMemo(
@@ -133,29 +132,6 @@ function Flow() {
         zoomOnDoubleClick={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Panel position="top-left">
-          <div className="view-switcher" role="group" aria-label="Canvases">
-            {views.map((v) => (
-              <button
-                type="button"
-                key={v.id}
-                className={v.id === activeViewId ? 'is-active' : ''}
-                aria-pressed={v.id === activeViewId}
-                onClick={() => setActiveView(v.id)}
-              >
-                {v.name}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="view-switcher__new"
-              title="New canvas"
-              onClick={() => createView()}
-            >
-              + new
-            </button>
-          </div>
-        </Panel>
         <Panel position="top-right">
           <div className="length-toggle" role="group" aria-label="Response length">
             <button
@@ -187,7 +163,10 @@ function Flow() {
 export function Canvas() {
   return (
     <ReactFlowProvider>
-      <Flow />
+      <div className="workspace">
+        <Sidebar />
+        <Flow />
+      </div>
     </ReactFlowProvider>
   );
 }

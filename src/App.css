@@ -19,30 +19,101 @@ body,
 }
 
 /* Canvas switcher (one View = one canvas). */
-.view-switcher {
-  display: inline-flex;
-  gap: 4px;
+/* --- Workspace: collapsible canvas sidebar + canvas --- */
+.workspace {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  flex: 0 0 240px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  gap: 8px;
+  border-right: 1px solid var(--border, #e5e4e7);
+  background: color-mix(in srgb, var(--text, #888) 4%, var(--bg, #fff));
+  font: 13px/1.4 var(--sans, system-ui);
+}
+.sidebar--collapsed {
+  width: 44px;
+  flex-basis: 44px;
   align-items: center;
-  flex-wrap: wrap;
-  max-width: 60vw;
-  font: 11px var(--mono, monospace);
+  padding: 10px 6px;
 }
-.view-switcher button {
-  border: 1px solid var(--border, #d9d9d9);
-  background: var(--bg, #fff);
+
+.sidebar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar__title {
+  font: 11px/1 var(--mono, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--text, #888);
-  padding: 4px 10px;
-  border-radius: 6px;
+  opacity: 0.7;
+}
+
+.sidebar__icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--text, #888);
   cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
 }
-.view-switcher button.is-active {
-  border-color: var(--accent, #aa3bff);
-  background: var(--accent, #aa3bff);
-  color: #fff;
+.sidebar__icon-btn:hover {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
+  color: var(--text-h, #000);
 }
-.view-switcher__new {
-  color: var(--accent, #aa3bff) !important;
-  border-style: dashed !important;
+
+.sidebar__new {
+  text-align: left;
+  border: 1px dashed var(--accent-border, rgba(170, 59, 255, 0.5));
+  background: transparent;
+  color: var(--accent, #aa3bff);
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: 13px var(--sans, system-ui);
+}
+.sidebar__new:hover {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.1));
+}
+
+.sidebar__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.sidebar__item {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-h, #111);
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 13px var(--sans, system-ui);
+}
+.sidebar__item:hover {
+  background: color-mix(in srgb, var(--text, #888) 8%, transparent);
+}
+.sidebar__item.is-active {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.15));
+  color: var(--accent, #aa3bff);
+  font-weight: 500;
 }
 
 /* Per-workspace short/long response toggle (canvas panel). */
